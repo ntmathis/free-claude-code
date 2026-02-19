@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 @patch("providers.common.error_mapping.map_error")

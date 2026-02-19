@@ -1,13 +1,14 @@
-import pytest
-from unittest.mock import patch, MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from messaging.transcription import (
-    transcribe_audio,
-    _get_pipeline,
-    _resolve_model_id,
-    _MODEL_MAP,
-    _pipeline_cache,
     MAX_AUDIO_SIZE_BYTES,
+    _get_pipeline,
+    _pipeline_cache,
+    _resolve_model_id,
+    transcribe_audio,
 )
 
 
