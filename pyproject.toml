@@ -70,6 +70,9 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["api", "cli", "config", "messaging", "providers", "utils"]
 
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

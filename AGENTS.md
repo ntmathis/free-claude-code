@@ -26,7 +26,6 @@
 - **Performance**: Use list accumulation for strings (not `+=` in loops), cache env vars at init, prefer iterative over recursive when stack depth matters.
 - **Platform-agnostic naming**: Use generic names (e.g. `PLATFORM_EDIT`) not platform-specific ones (e.g. `TELEGRAM_EDIT`) in shared code.
 - **No type ignores**: Do not add `# type: ignore` or `# ty: ignore`. Fix the underlying type issue.
-- **Backward compatibility**: When moving modules, add re-exports from old locations so existing imports keep working.
 
 ## COGNITIVE WORKFLOW
 1. **ANALYZE**: Read relevant files. Do not guess.

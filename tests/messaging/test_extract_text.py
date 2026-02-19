@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from utils.text import extract_text_from_content
+from providers.common.text import extract_text_from_content
 
 
 class TestExtractTextFromContent:
