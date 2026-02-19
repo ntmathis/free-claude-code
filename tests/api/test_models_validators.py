@@ -12,6 +12,7 @@ def mock_settings():
     settings.model = "target-model-from-settings"
     settings.opus_model = "opus-from-settings"
     settings.sonnet_model = "sonnet-from-settings"
+    settings.haiku_model = None
     return settings
 
 
