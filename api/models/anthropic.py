@@ -113,7 +113,13 @@ class MessagesRequest(BaseModel):
             self.original_model = self.model
 
         # Use centralized model normalization
-        normalized = normalize_model_name(self.model, settings.model)
+        normalized = normalize_model_name(
+            self.model,
+            default_model=settings.model,
+            opus_model=settings.opus_model,
+            sonnet_model=settings.sonnet_model,
+            haiku_model=settings.haiku_model,
+        )
         if normalized != self.model:
             self.model = normalized
 
@@ -137,4 +143,10 @@ class TokenCountRequest(BaseModel):
         """Map any Claude model name to the configured model."""
         settings = get_settings()
         # Use centralized model normalization
-        return normalize_model_name(v, settings.model)
+        return normalize_model_name(
+            v,
+            default_model=settings.model,
+            opus_model=settings.opus_model,
+            sonnet_model=settings.sonnet_model,
+            haiku_model=settings.haiku_model,
+        )

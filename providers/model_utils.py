@@ -42,9 +42,15 @@ def is_claude_model(model: str) -> bool:
     return any(name in model_lower for name in _CLAUDE_IDENTIFIERS)
 
 
-def normalize_model_name(model: str, default_model: str | None = None) -> str:
+def normalize_model_name(
+    model: str,
+    default_model: str | None = None,
+    opus_model: str | None = None,
+    sonnet_model: str | None = None,
+    haiku_model: str | None = None,
+) -> str:
     """
-    Normalize a model name by stripping prefixes and mapping to default if needed.
+    Normalize a model name by stripping prefixes and mapping to specific/default models if needed.
 
     This is the central function for model name normalization across the API.
     It strips provider prefixes and maps Claude model names to the configured model.
@@ -53,6 +59,9 @@ def normalize_model_name(model: str, default_model: str | None = None) -> str:
         model: The model name (may include provider prefix)
         default_model: The default model to use for Claude models.
                        If None, uses settings.model from config.
+        opus_model: Specific override for opus models
+        sonnet_model: Specific override for sonnet models
+        haiku_model: Specific override for haiku models
 
     Returns:
         Normalized model name (original if not a Claude model, mapped if Claude)
@@ -62,6 +71,14 @@ def normalize_model_name(model: str, default_model: str | None = None) -> str:
 
     # Map Claude models to default
     if is_claude_model(clean):
+        clean_lower = clean.lower()
+        if "opus" in clean_lower and opus_model is not None:
+            return opus_model
+        if "sonnet" in clean_lower and sonnet_model is not None:
+            return sonnet_model
+        if "haiku" in clean_lower and haiku_model is not None:
+            return haiku_model
+
         if default_model is None:
             # Use environment/config default
             default_model = os.getenv("MODEL", "moonshotai/kimi-k2-thinking")

@@ -10,6 +10,8 @@ from config.settings import Settings
 def mock_settings():
     settings = Settings()
     settings.model = "target-model-from-settings"
+    settings.opus_model = "opus-from-settings"
+    settings.sonnet_model = "sonnet-from-settings"
     return settings
 
 
@@ -21,7 +23,7 @@ def test_messages_request_map_model_claude_to_default(mock_settings):
             messages=[Message(role="user", content="hello")],
         )
 
-        assert request.model == "target-model-from-settings"
+        assert request.model == "opus-from-settings"
         assert request.original_model == "claude-3-opus"
 
 
@@ -45,6 +47,7 @@ def test_messages_request_map_model_with_provider_prefix(mock_settings):
             messages=[Message(role="user", content="hello")],
         )
 
+        # Since haiku_model is None in mock_settings, maps to default
         assert request.model == "target-model-from-settings"
 
 
@@ -54,7 +57,7 @@ def test_token_count_request_model_validation(mock_settings):
             model="claude-3-sonnet", messages=[Message(role="user", content="hello")]
         )
 
-        assert request.model == "target-model-from-settings"
+        assert request.model == "sonnet-from-settings"
 
 
 def test_messages_request_model_mapping_logs(mock_settings):

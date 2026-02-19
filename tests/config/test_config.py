@@ -319,3 +319,12 @@ class TestSettingsOptionalStr:
         monkeypatch.setenv("WHISPER_DEVICE", device)
         s = Settings()
         assert s.whisper_device == device
+
+    @pytest.mark.parametrize("model_env", ["OPUS_MODEL", "SONNET_MODEL", "HAIKU_MODEL"])
+    def test_empty_model_override_raises_error(self, monkeypatch, model_env):
+        """Empty specific model overrides raise ValueError."""
+        from config.settings import Settings
+
+        monkeypatch.setenv(model_env, "")
+        with pytest.raises(ValidationError, match="cannot be empty"):
+            Settings()

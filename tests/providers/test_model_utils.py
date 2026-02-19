@@ -39,6 +39,27 @@ def test_normalize_model_name_non_claude_unchanged():
     )
 
 
+def test_normalize_model_name_specific_overrides():
+    default = "target-model"
+    opus = "opus-replacement"
+    sonnet = "sonnet-replacement"
+    haiku = "haiku-replacement"
+
+    # Specific overrides match based on the substring in the clean model name
+    assert normalize_model_name("claude-3-opus", default, opus_model=opus) == opus
+    assert (
+        normalize_model_name("claude-3.5-sonnet", default, sonnet_model=sonnet)
+        == sonnet
+    )
+    assert (
+        normalize_model_name("anthropic/claude-3-haiku", default, haiku_model=haiku)
+        == haiku
+    )
+
+    # If the specific override is None, defaults back to general replacement
+    assert normalize_model_name("claude-3-opus", default, opus_model=None) == default
+
+
 def test_get_original_model():
     assert get_original_model("any-model") == "any-model"
 

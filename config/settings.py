@@ -40,8 +40,13 @@ class Settings(BaseSettings):
     )
 
     # ==================== Model ====================
-    # All Claude model requests are mapped to this single model
-    model: str = "moonshotai/kimi-k2-thinking"
+    # Default model for all Claude model requests if specific overrides aren't provided
+    model: str = "stepfun-ai/step-3.5-flash"
+
+    # Specific Claude model overrides
+    opus_model: str | None = Field(default=None, validation_alias="OPUS_MODEL")
+    sonnet_model: str | None = Field(default=None, validation_alias="SONNET_MODEL")
+    haiku_model: str | None = Field(default=None, validation_alias="HAIKU_MODEL")
 
     # ==================== Provider Rate Limiting ====================
     provider_rate_limit: int = Field(default=40, validation_alias="PROVIDER_RATE_LIMIT")
@@ -115,6 +120,20 @@ class Settings(BaseSettings):
     def parse_optional_str(cls, v):
         if v == "":
             return None
+        return v
+
+    @field_validator(
+        "opus_model",
+        "sonnet_model",
+        "haiku_model",
+        mode="before",
+    )
+    @classmethod
+    def validate_model_override(cls, v, info):
+        if v == "":
+            raise ValueError(
+                f"Specific model override '{info.field_name}' cannot be empty. Remove the key or specify a valid model."
+            )
         return v
 
     @field_validator("whisper_device")
