@@ -705,3 +705,203 @@ class TestDiscordPlatform:
         assert field_map["🌳 Message Trees"] == "3"
         assert field_map["💬 CLI Sessions"] == "2"
         assert field_map["⏱ Uptime"] == "1m 30s"
+
+    @pytest.mark.asyncio
+    async def test_on_discord_message_with_text_attachment(self):
+        """Test that text attachment content is combined with message content."""
+        platform = DiscordPlatform(bot_token="token", allowed_channel_ids="123")
+        handler = AsyncMock()
+        platform.on_message(handler)
+
+        # Create mock message with text content and text attachment
+        msg = MagicMock()
+        msg.author.bot = False
+        msg.author.id = 456
+        msg.author.display_name = "User"
+        msg.content = "Check this file:"
+        msg.channel.id = 123
+        msg.id = 789
+        msg.reference = None
+
+        # Create mock text attachment
+        mock_att = MagicMock()
+        mock_att.filename = "notes.txt"
+        mock_att.content_type = "text/plain"
+        mock_att.read = AsyncMock(return_value=b"Important content from file")
+        msg.attachments = [mock_att]
+
+        await platform._on_discord_message(msg)
+
+        # Verify handler was called
+        handler.assert_awaited_once()
+        call = handler.call_args[0][0]
+
+        # Check that combined text includes both message content and attachment content
+        assert "Check this file:" in call.text
+        assert "Important content from file" in call.text
+        assert "notes.txt" in call.text  # filename should be included
+        assert call.chat_id == "123"
+        assert call.user_id == "456"
+
+    @pytest.mark.asyncio
+    async def test_on_discord_message_with_text_attachment_only(self):
+        """Test that message with only text attachment (no content) is processed."""
+        platform = DiscordPlatform(bot_token="token", allowed_channel_ids="123")
+        handler = AsyncMock()
+        platform.on_message(handler)
+
+        # Create mock message with NO text content but with text attachment
+        msg = MagicMock()
+        msg.author.bot = False
+        msg.author.id = 456
+        msg.author.display_name = "User"
+        msg.content = ""  # Empty content
+        msg.channel.id = 123
+        msg.id = 789
+        msg.reference = None
+
+        # Create mock text attachment
+        mock_att = MagicMock()
+        mock_att.filename = "data.txt"
+        mock_att.content_type = "text/plain"
+        mock_att.read = AsyncMock(return_value=b"Content from txt file")
+        msg.attachments = [mock_att]
+
+        await platform._on_discord_message(msg)
+
+        # Verify handler WAS called (should not be ignored)
+        handler.assert_awaited_once()
+        call = handler.call_args[0][0]
+
+        # Check that only attachment content is used
+        assert call.text == "Content from txt file"
+        assert call.chat_id == "123"
+        assert call.user_id == "456"
+
+    @pytest.mark.asyncio
+    async def test_on_discord_message_with_non_text_attachment_ignored(self):
+        """Test that message with only non-text attachment and no content is ignored."""
+        platform = DiscordPlatform(bot_token="token", allowed_channel_ids="123")
+        handler = AsyncMock()
+        platform.on_message(handler)
+
+        # Create mock message with NO text content and non-text attachment (e.g., image)
+        msg = MagicMock()
+        msg.author.bot = False
+        msg.author.id = 456
+        msg.author.display_name = "User"
+        msg.content = ""
+        msg.channel.id = 123
+        msg.id = 789
+        msg.reference = None
+
+        # Create mock non-text attachment (image)
+        mock_att = MagicMock()
+        mock_att.filename = "image.png"
+        mock_att.content_type = "image/png"
+        msg.attachments = [mock_att]
+
+        await platform._on_discord_message(msg)
+
+        # Verify handler was NOT called
+        handler.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_on_discord_message_text_attachment_decode_failure(self):
+        """Test that if text attachment fails to decode, fall back to message content only."""
+        platform = DiscordPlatform(bot_token="token", allowed_channel_ids="123")
+        handler = AsyncMock()
+        platform.on_message(handler)
+
+        # Create mock message with text content and undecodable attachment
+        msg = MagicMock()
+        msg.author.bot = False
+        msg.author.id = 456
+        msg.author.display_name = "User"
+        msg.content = "Here is my message"
+        msg.channel.id = 123
+        msg.id = 789
+        msg.reference = None
+
+        # Create mock text attachment that fails to read
+        mock_att = MagicMock()
+        mock_att.filename = "file.txt"
+        mock_att.content_type = "text/plain"
+        # Simulate an I/O error when reading
+        mock_att.read = AsyncMock(side_effect=IOError("Disk error"))
+        msg.attachments = [mock_att]
+
+        await platform._on_discord_message(msg)
+
+        # Verify handler was called with message content only (attachment ignored)
+        handler.assert_awaited_once()
+        call = handler.call_args[0][0]
+
+        # Should use only the message content, not attachment
+        assert call.text == "Here is my message"
+
+    @pytest.mark.asyncio
+    async def test_is_text_attachment(self):
+        """Test _is_text_attachment correctly identifies text files."""
+        platform = DiscordPlatform(bot_token="token")
+
+        # Text files by MIME type
+        att1 = MagicMock()
+        att1.content_type = "text/plain"
+        att1.filename = "file.txt"
+        assert platform._is_text_attachment(att1) is True
+
+        # Text files by extension
+        att2 = MagicMock()
+        att2.content_type = None
+        att2.filename = "script.py"
+        assert platform._is_text_attachment(att2) is True
+
+        att3 = MagicMock()
+        att3.content_type = None
+        att3.filename = "README.md"
+        assert platform._is_text_attachment(att3) is True
+
+        att4 = MagicMock()
+        att4.content_type = None
+        att4.filename = "config.json"
+        assert platform._is_text_attachment(att4) is True
+
+        # Non-text files
+        att5 = MagicMock()
+        att5.content_type = "image/png"
+        att5.filename = "image.png"
+        assert platform._is_text_attachment(att5) is False
+
+        att6 = MagicMock()
+        att6.content_type = "application/pdf"
+        att6.filename = "doc.pdf"
+        assert platform._is_text_attachment(att6) is False
+
+    @pytest.mark.asyncio
+    async def test_get_text_attachment(self):
+        """Test _get_text_attachment returns first text attachment."""
+        platform = DiscordPlatform(bot_token="token")
+
+        # Message with both text and non-text attachments
+        msg = MagicMock()
+        att_text = MagicMock()
+        att_text.filename = "notes.txt"
+        att_text.content_type = "text/plain"
+        att_nontext = MagicMock()
+        att_nontext.filename = "image.jpg"
+        att_nontext.content_type = "image/jpeg"
+        msg.attachments = [att_nontext, att_text]  # Non-text first, text second
+
+        result = platform._get_text_attachment(msg)
+        assert result is att_text
+
+        # Message with no text attachments
+        msg2 = MagicMock()
+        att_img = MagicMock()
+        att_img.filename = "photo.png"
+        att_img.content_type = "image/png"
+        msg2.attachments = [att_img]
+
+        result2 = platform._get_text_attachment(msg2)
+        assert result2 is None

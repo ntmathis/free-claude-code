@@ -21,6 +21,50 @@ from ..rendering.discord_markdown import format_status_discord
 from .base import MessagingPlatform
 
 AUDIO_EXTENSIONS = (".ogg", ".mp4", ".mp3", ".wav", ".m4a")
+TEXT_EXTENSIONS = (
+    ".txt",
+    ".md",
+    ".markdown",
+    ".text",
+    ".py",
+    ".js",
+    ".ts",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".json",
+    ".xml",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".ps1",
+    ".rb",
+    ".go",
+    ".rs",
+    ".php",
+    ".pl",
+    ".lua",
+    ".r",
+    ".sql",
+    ".html",
+    ".css",
+    ".scss",
+    ".vue",
+    ".tsx",
+    ".jsx",
+    ".log",
+    ".csv",
+    ".tsv",
+)
 
 _discord_module: Any = None
 try:
@@ -267,6 +311,48 @@ class DiscordPlatform(MessagingPlatform):
                 return att
         return None
 
+    def _is_text_attachment(self, attachment: Any) -> bool:
+        """Check if an attachment is a text file."""
+        ct = (attachment.content_type or "").lower()
+        fn = (attachment.filename or "").lower()
+
+        # Check if content type is text-based
+        if ct.startswith("text/"):
+            return True
+
+        # Check for common text file extensions
+        return any(fn.endswith(ext) for ext in TEXT_EXTENSIONS)
+
+    def _get_text_attachment(self, message: Any) -> Any | None:
+        """Return first text attachment, or None."""
+        for att in message.attachments:
+            if self._is_text_attachment(att):
+                return att
+        return None
+
+    async def _read_text_attachment(self, attachment: Any) -> str | None:
+        """Download and read text attachment content. Returns None if failed."""
+        try:
+            # Download attachment content
+            data = await attachment.read()
+            # Try to decode as text
+            # Try UTF-8 first, then fallback to latin-1
+            try:
+                text = data.decode("utf-8")
+            except UnicodeDecodeError:
+                try:
+                    text = data.decode("latin-1")
+                except UnicodeDecodeError:
+                    logger.warning(
+                        f"Could not decode attachment {attachment.filename} as text"
+                    )
+                    return None
+
+            return text.strip()
+        except Exception as e:
+            logger.error(f"Failed to read text attachment {attachment.filename}: {e}")
+            return None
+
     async def _handle_voice_note(
         self, message: Any, attachment: Any, channel_id: str
     ) -> bool:
@@ -380,12 +466,31 @@ class DiscordPlatform(MessagingPlatform):
         if not self.allowed_channel_ids or channel_id not in self.allowed_channel_ids:
             return
 
-        # Handle voice/audio attachments when message has no text content
-        if not message.content:
-            audio_att = self._get_audio_attachment(message)
-            if audio_att:
-                await self._handle_voice_note(message, audio_att, channel_id)
-                return
+        # Handle voice/audio attachments first (takes priority)
+        audio_att = self._get_audio_attachment(message)
+        if audio_att:
+            await self._handle_voice_note(message, audio_att, channel_id)
+            return
+
+        # Get text content from message and/or text attachments
+        base_text = message.content or ""
+        text_att = self._get_text_attachment(message)
+
+        if text_att:
+            text_content = await self._read_text_attachment(text_att)
+            if text_content:
+                # Combine message content with attachment content
+                if base_text:
+                    combined_text = f"{base_text}\n\n[Attachment: {text_att.filename}]\n{text_content}"
+                else:
+                    combined_text = text_content
+            else:
+                combined_text = base_text
+        else:
+            combined_text = base_text
+
+        # If no text content (no message text and no readable text attachment), ignore
+        if not combined_text or not combined_text.strip():
             return
 
         user_id = str(message.author.id)
@@ -396,8 +501,8 @@ class DiscordPlatform(MessagingPlatform):
             else None
         )
 
-        text_preview = (message.content or "")[:80]
-        if len(message.content or "") > 80:
+        text_preview = combined_text[:80]
+        if len(combined_text) > 80:
             text_preview += "..."
         logger.info(
             "DISCORD_MSG: chat_id=%s message_id=%s reply_to=%s text_preview=%r",
@@ -411,7 +516,7 @@ class DiscordPlatform(MessagingPlatform):
             return
 
         incoming = IncomingMessage(
-            text=message.content,
+            text=combined_text,
             chat_id=channel_id,
             user_id=user_id,
             message_id=message_id,
@@ -765,13 +870,27 @@ class DiscordPlatform(MessagingPlatform):
             embed = discord.Embed(
                 title="📊 Bot Statistics",
                 color=discord.Color.blue(),
-                timestamp=datetime.now(UTC)
+                timestamp=datetime.now(UTC),
             )
             # Add fields
-            embed.add_field(name="🔄 Active Tasks", value=str(stats.get('active_tasks', 0)), inline=True)
-            embed.add_field(name="🌳 Message Trees", value=str(stats.get('tree_count', 0)), inline=True)
-            embed.add_field(name="💬 CLI Sessions", value=str(stats.get('cli_sessions', 0)), inline=True)
-            embed.add_field(name="⏱ Uptime", value=stats.get('uptime', 'N/A'), inline=False)
+            embed.add_field(
+                name="🔄 Active Tasks",
+                value=str(stats.get("active_tasks", 0)),
+                inline=True,
+            )
+            embed.add_field(
+                name="🌳 Message Trees",
+                value=str(stats.get("tree_count", 0)),
+                inline=True,
+            )
+            embed.add_field(
+                name="💬 CLI Sessions",
+                value=str(stats.get("cli_sessions", 0)),
+                inline=True,
+            )
+            embed.add_field(
+                name="⏱ Uptime", value=stats.get("uptime", "N/A"), inline=False
+            )
             embed.set_footer(text=self.name)
 
             # Cast to a messageable channel to satisfy type checker; send may fail at runtime
