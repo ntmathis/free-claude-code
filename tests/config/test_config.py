@@ -104,9 +104,13 @@ class TestSettings:
         settings = Settings()
         assert settings.http_connect_timeout == 5.0
 
-    def test_http_timeouts_defaults(self):
+    def test_http_timeouts_defaults(self, monkeypatch):
         """HTTP timeout defaults are set correctly."""
         from config.settings import Settings
+
+        monkeypatch.delenv("HTTP_READ_TIMEOUT", raising=False)
+        monkeypatch.delenv("HTTP_WRITE_TIMEOUT", raising=False)
+        monkeypatch.delenv("HTTP_CONNECT_TIMEOUT", raising=False)
 
         settings = Settings()
         assert settings.http_read_timeout == 5.0
