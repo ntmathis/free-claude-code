@@ -5,8 +5,8 @@ from .handler import ClaudeMessageHandler
 from .models import IncomingMessage
 from .platforms.base import CLISession, MessagingPlatform, SessionManagerInterface
 from .session import SessionStore
-from .tree_data import MessageNode, MessageState, MessageTree
-from .tree_queue import TreeQueueManager
+from .trees.data import MessageNode, MessageState, MessageTree
+from .trees.queue_manager import TreeQueueManager
 
 __all__ = [
     "CLISession",
