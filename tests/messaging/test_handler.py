@@ -644,11 +644,7 @@ async def test_handle_message_clear_command_reply_pending_voice_cancels(
 
 
 @pytest.mark.asyncio
-
-
 @pytest.mark.asyncio
-
-
 @pytest.mark.asyncio
 async def test_handle_stats_command_uses_embed_when_available():
     """Test that /stats uses send_stats_embed if platform supports it."""
@@ -661,7 +657,7 @@ async def test_handle_stats_command_uses_embed_when_available():
 
     # Mock cli_manager, tree_queue, session_store
     mock_cli_manager = MagicMock()
-    mock_cli_manager.get_stats.return_value = {'active_sessions': 2}
+    mock_cli_manager.get_stats.return_value = {"active_sessions": 2}
     mock_tree_queue = MagicMock()
     mock_tree_queue.get_tree_count.return_value = 1
     mock_tree_queue.get_active_task_count.return_value = 3
@@ -691,7 +687,7 @@ async def test_handle_stats_command_uses_embed_when_available():
     args = mock_platform.send_stats_embed.call_args[0]
     assert args[0] == "123"
     stats_dict = args[1]
-    assert stats_dict['active_tasks'] == 3
-    assert stats_dict['tree_count'] == 1
-    assert stats_dict['cli_sessions'] == 2
-    assert stats_dict['uptime'] == "1s"
+    assert stats_dict["active_tasks"] == 3
+    assert stats_dict["tree_count"] == 1
+    assert stats_dict["cli_sessions"] == 2
+    assert stats_dict["uptime"] == "1s"

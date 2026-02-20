@@ -12,6 +12,8 @@ import time
 
 from loguru import logger
 
+from config.settings import get_settings
+
 from .event_parser import parse_cli_event
 from .models import IncomingMessage
 from .platforms.base import MessagingPlatform, SessionManagerInterface
@@ -852,11 +854,13 @@ class ClaudeMessageHandler:
         uptime_str = self.platform.get_uptime()
 
         # Build stats dict
+        settings = get_settings()
         stats_dict = {
-            'active_tasks': active_tasks,
-            'tree_count': tree_count,
-            'cli_sessions': cli_stats.get('active_sessions', 0),
-            'uptime': uptime_str,
+            "active_tasks": active_tasks,
+            "tree_count": tree_count,
+            "cli_sessions": cli_stats.get("active_sessions", 0),
+            "uptime": uptime_str,
+            "model": settings.model,
         }
 
         # Try to use platform's rich embed if supported
@@ -879,6 +883,8 @@ class ClaudeMessageHandler:
             + ctx.escape_text(f"• Active Tasks: {active_tasks}")
             + "\n"
             + ctx.escape_text(f"• Uptime: {uptime_str}")
+            + "\n"
+            + ctx.escape_text(f"• Model: {settings.model}")
         )
         msg_id = await self.platform.queue_send_message(
             incoming.chat_id,

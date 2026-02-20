@@ -851,7 +851,7 @@ class TestDiscordPlatform:
         mock_att.filename = "file.txt"
         mock_att.content_type = "text/plain"
         # Simulate an I/O error when reading
-        mock_att.read = AsyncMock(side_effect=IOError("Disk error"))
+        mock_att.read = AsyncMock(side_effect=OSError("Disk error"))
         msg.attachments = [mock_att]
 
         await platform._on_discord_message(msg)

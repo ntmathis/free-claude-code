@@ -823,6 +823,7 @@ class DiscordPlatform(MessagingPlatform):
 
         # Check if presence updates are enabled
         from config.settings import get_settings
+
         settings = get_settings()
         if not settings.discord_enable_presence_updates:
             return
@@ -870,7 +871,7 @@ class DiscordPlatform(MessagingPlatform):
         """
         Send a rich embed with bot statistics.
 
-        stats dict expected keys: active_tasks, tree_count, uptime, cli_sessions
+        stats dict expected keys: active_tasks, tree_count, uptime, cli_sessions, model
         """
         # Build embed
         try:
@@ -898,6 +899,9 @@ class DiscordPlatform(MessagingPlatform):
             )
             embed.add_field(
                 name="⏱ Uptime", value=stats.get("uptime", "N/A"), inline=False
+            )
+            embed.add_field(
+                name="🤖 Model", value=stats.get("model", "N/A"), inline=False
             )
             embed.set_footer(text=self.name)
 
