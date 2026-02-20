@@ -367,8 +367,6 @@ Browse: [model.lmstudio.ai](https://model.lmstudio.ai)
 | `ENABLE_TITLE_GENERATION_SKIP`    | Skip title generation                                | `true`                      |
 | `ENABLE_SUGGESTION_MODE_SKIP`     | Skip suggestion mode                                 | `true`                      |
 | `ENABLE_FILEPATH_EXTRACTION_MOCK` | Enable filepath extraction mock                      | `true`                      |
-
-When a model variable uses a roster, candidates are tried in order. Failover only happens before the first streamed event and only for transient failures (rate limits, timeouts, and 5xx/overload responses).
 | `MESSAGING_PLATFORM`              | Messaging platform: `discord` or `telegram`          | `discord`                   |
 | `DISCORD_BOT_TOKEN`               | Discord Bot Token                                    | `""`                        |
 | `ALLOWED_DISCORD_CHANNELS`        | Comma-separated channel IDs (empty = none allowed)   | `""`                        |
@@ -381,6 +379,8 @@ When a model variable uses a roster, candidates are tried in order. Failover onl
 | `MESSAGING_RATE_WINDOW`           | Messaging window (seconds)                           | `1`                         |
 | `CLAUDE_WORKSPACE`                | Directory for agent workspace                        | `./agent_workspace`         |
 | `ALLOWED_DIR`                     | Allowed directories for agent                        | `""`                        |
+
+When a model variable uses a roster, candidates are tried in order. Failover only happens before the first streamed event and only for transient failures (rate limits, timeouts, and 5xx/overload responses).
 
 See [`.env.example`](.env.example) for all supported parameters.
 
