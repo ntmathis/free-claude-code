@@ -859,11 +859,6 @@ class DiscordPlatform(MessagingPlatform):
 
         stats dict expected keys: active_tasks, tree_count, uptime, cli_sessions
         """
-        channel = self._client.get_channel(int(chat_id))
-        if not channel:
-            logger.warning(f"Cannot send stats embed: channel {chat_id} not found")
-            return
-
         # Build embed
         try:
             discord = _get_discord()
@@ -892,6 +887,22 @@ class DiscordPlatform(MessagingPlatform):
                 name="⏱ Uptime", value=stats.get("uptime", "N/A"), inline=False
             )
             embed.set_footer(text=self.name)
+
+            # Check if there's an active slash interaction to respond to
+            interaction = _current_interaction.get()
+            if interaction is not None and interaction.response.is_done():
+                try:
+                    await interaction.edit_original_response(embed=embed)
+                    return
+                except Exception as e:
+                    logger.warning(f"Failed to edit interaction response with stats embed: {e}")
+                    # Fallback to channel send below
+
+            # Fallback: send as regular channel message
+            channel = self._client.get_channel(int(chat_id))
+            if not channel:
+                logger.warning(f"Cannot send stats embed: channel {chat_id} not found")
+                return
 
             # Cast to a messageable channel to satisfy type checker; send may fail at runtime
             send_channel = cast(_discord.abc.Messageable, channel)
