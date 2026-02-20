@@ -93,6 +93,17 @@ class Settings(BaseSettings):
     # Device: "cpu" | "cuda"
     whisper_device: str = Field(default="cpu", validation_alias="WHISPER_DEVICE")
 
+    # ==================== Discord Feature Flags ====================
+    discord_enable_text_attachments: bool = Field(
+        default=True, validation_alias="DISCORD_ENABLE_TEXT_ATTACHMENTS"
+    )
+    discord_enable_stats_interaction: bool = Field(
+        default=True, validation_alias="DISCORD_ENABLE_STATS_INTERACTION"
+    )
+    discord_enable_presence_updates: bool = Field(
+        default=True, validation_alias="DISCORD_ENABLE_PRESENCE_UPDATES"
+    )
+
     # ==================== Bot Wrapper Config ====================
     telegram_bot_token: str | None = None
     allowed_telegram_user_id: str | None = None

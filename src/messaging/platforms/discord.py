@@ -472,9 +472,16 @@ class DiscordPlatform(MessagingPlatform):
             await self._handle_voice_note(message, audio_att, channel_id)
             return
 
+        # Check if text attachments are enabled
+        from config.settings import get_settings
+
+        settings = get_settings()
+
         # Get text content from message and/or text attachments
         base_text = message.content or ""
-        text_att = self._get_text_attachment(message)
+        text_att = None
+        if settings.discord_enable_text_attachments:
+            text_att = self._get_text_attachment(message)
 
         if text_att:
             text_content = await self._read_text_attachment(text_att)
@@ -814,6 +821,12 @@ class DiscordPlatform(MessagingPlatform):
         if not self._connected:
             return
 
+        # Check if presence updates are enabled
+        from config.settings import get_settings
+        settings = get_settings()
+        if not settings.discord_enable_presence_updates:
+            return
+
         if not DISCORD_AVAILABLE or _discord_module is None:
             return
 
@@ -888,14 +901,23 @@ class DiscordPlatform(MessagingPlatform):
             )
             embed.set_footer(text=self.name)
 
-            # Check if there's an active slash interaction to respond to
+            # Check if interaction response is enabled and available
+            from config.settings import get_settings
+
+            settings = get_settings()
             interaction = _current_interaction.get()
-            if interaction is not None and interaction.response.is_done():
+            if (
+                settings.discord_enable_stats_interaction
+                and interaction is not None
+                and interaction.response.is_done()
+            ):
                 try:
                     await interaction.edit_original_response(embed=embed)
                     return
                 except Exception as e:
-                    logger.warning(f"Failed to edit interaction response with stats embed: {e}")
+                    logger.warning(
+                        f"Failed to edit interaction response with stats embed: {e}"
+                    )
                     # Fallback to channel send below
 
             # Fallback: send as regular channel message

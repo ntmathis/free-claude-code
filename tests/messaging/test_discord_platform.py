@@ -669,6 +669,29 @@ class TestDiscordPlatform:
             await platform.update_presence("working")
             mock_change.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_update_presence_disabled_by_setting(self):
+        """Test that update_presence does nothing when discord_enable_presence_updates is False."""
+        platform = DiscordPlatform(bot_token="token")
+        platform._connected = True
+
+        with (
+            patch.object(
+                platform._client,
+                "change_presence",
+                new_callable=AsyncMock,
+            ) as mock_change,
+            patch("config.settings.get_settings") as mock_get_settings,
+        ):
+            mock_settings = MagicMock()
+            mock_settings.discord_enable_presence_updates = False
+            mock_get_settings.return_value = mock_settings
+
+            await platform.update_presence("working")
+
+            # Should not call change_presence
+            mock_change.assert_not_awaited()
+
     def test_get_uptime_returns_formatted_string(self):
         """Test get_uptime returns a non-empty string with digits."""
         platform = DiscordPlatform(bot_token="token")
@@ -689,10 +712,10 @@ class TestDiscordPlatform:
         platform._client.get_channel = MagicMock(return_value=mock_channel)
 
         stats = {
-            'active_tasks': 5,
-            'tree_count': 3,
-            'cli_sessions': 2,
-            'uptime': '1m 30s',
+            "active_tasks": 5,
+            "tree_count": 3,
+            "cli_sessions": 2,
+            "uptime": "1m 30s",
         }
         await platform.send_stats_embed("123", stats)
 
@@ -905,3 +928,115 @@ class TestDiscordPlatform:
 
         result2 = platform._get_text_attachment(msg2)
         assert result2 is None
+
+    @pytest.mark.asyncio
+    async def test_text_attachment_disabled_by_setting(self):
+        """Test that text attachments are ignored when discord_enable_text_attachments is False."""
+        platform = DiscordPlatform(bot_token="token", allowed_channel_ids="123")
+        handler = AsyncMock()
+        platform.on_message(handler)
+
+        # Create message with ONLY a text attachment (no content)
+        msg = MagicMock()
+        msg.author.bot = False
+        msg.author.id = 456
+        msg.author.display_name = "User"
+        msg.content = ""
+        msg.channel.id = 123
+        msg.id = 789
+        msg.reference = None
+        mock_att = MagicMock()
+        mock_att.filename = "file.txt"
+        mock_att.content_type = "text/plain"
+        mock_att.read = AsyncMock(return_value=b"Content from file")
+        msg.attachments = [mock_att]
+
+        # Patch settings to disable text attachments
+        with patch("config.settings.get_settings") as mock_get_settings:
+            mock_settings = MagicMock()
+            mock_settings.discord_enable_text_attachments = False
+            mock_get_settings.return_value = mock_settings
+
+            await platform._on_discord_message(msg)
+
+        # Handler should NOT be called because text attachment is ignored and there's no content
+        handler.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_send_stats_embed_interaction_disabled_uses_channel_send(self):
+        """Test that send_stats_embed uses channel send when discord_enable_stats_interaction is False, even with active interaction."""
+        platform = DiscordPlatform(bot_token="token")
+        platform._connected = True
+
+        # Mock channel
+        mock_channel = AsyncMock()
+        platform._client.get_channel = MagicMock(return_value=mock_channel)
+
+        # Mock an active interaction
+        mock_interaction = MagicMock()
+        mock_interaction.response.is_done.return_value = True
+        # edit_original_response should NOT be called when feature disabled
+        mock_interaction.edit_original_response = AsyncMock()
+
+        # Set interaction context
+        from messaging.platforms.discord import _current_interaction
+
+        token = _current_interaction.set(mock_interaction)
+        try:
+            # Patch settings to disable stats interaction
+            with patch("config.settings.get_settings") as mock_get_settings:
+                mock_settings = MagicMock()
+                mock_settings.discord_enable_stats_interaction = False
+                mock_get_settings.return_value = mock_settings
+
+                await platform.send_stats_embed(
+                    "123",
+                    {
+                        "active_tasks": 1,
+                        "tree_count": 2,
+                        "cli_sessions": 3,
+                        "uptime": "1h",
+                    },
+                )
+
+            # Verify interaction was NOT edited
+            mock_interaction.edit_original_response.assert_not_called()
+            # Verify channel.send was called (embed sent as new message)
+            mock_channel.send.assert_awaited_once()
+            args, kwargs = mock_channel.send.call_args
+            assert "embed" in kwargs
+        finally:
+            _current_interaction.reset(token)
+
+    @pytest.mark.asyncio
+    async def test_send_stats_embed_interaction_enabled_edits_response(self):
+        """Test that send_stats_embed edits the interaction when discord_enable_stats_interaction is True."""
+        platform = DiscordPlatform(bot_token="token")
+        platform._connected = True
+
+        # Mock channel but ensure it's not used
+        mock_channel = AsyncMock()
+        platform._client.get_channel = MagicMock(return_value=mock_channel)
+
+        # Mock an active interaction
+        mock_interaction = MagicMock()
+        mock_interaction.response.is_done.return_value = True
+        mock_interaction.edit_original_response = AsyncMock()
+
+        # Set interaction context
+        from messaging.platforms.discord import _current_interaction
+
+        token = _current_interaction.set(mock_interaction)
+        try:
+            # Use default settings (enabled). No patch.
+            await platform.send_stats_embed(
+                "123",
+                {"active_tasks": 1, "tree_count": 2, "cli_sessions": 3, "uptime": "1h"},
+            )
+
+            # Verify interaction was edited
+            mock_interaction.edit_original_response.assert_awaited_once()
+            # Verify channel.send was NOT called
+            mock_channel.send.assert_not_awaited()
+        finally:
+            _current_interaction.reset(token)
