@@ -4,10 +4,10 @@ from enum import StrEnum
 from typing import Any, Literal
 
 from loguru import logger
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, model_validator
 
 from config.settings import get_settings
-from providers.model_utils import normalize_model_name
+from providers.model_utils import resolve_model_target
 
 # =============================================================================
 # Content Block Types
@@ -104,6 +104,7 @@ class MessagesRequest(BaseModel):
     thinking: ThinkingConfig | None = None
     extra_body: dict[str, Any] | None = None
     original_model: str | None = None
+    target_provider_type: str | None = None
 
     @model_validator(mode="after")
     def map_model(self) -> MessagesRequest:
@@ -113,15 +114,15 @@ class MessagesRequest(BaseModel):
             self.original_model = self.model
 
         # Use centralized model normalization
-        normalized = normalize_model_name(
+        resolved = resolve_model_target(
             self.model,
             default_model=settings.model,
             opus_model=settings.opus_model,
             sonnet_model=settings.sonnet_model,
             haiku_model=settings.haiku_model,
         )
-        if normalized != self.model:
-            self.model = normalized
+        self.target_provider_type = resolved.provider_type
+        self.model = resolved.provider_model
 
         if self.model != self.original_model:
             logger.debug(f"MODEL MAPPING: '{self.original_model}' -> '{self.model}'")
@@ -136,17 +137,19 @@ class TokenCountRequest(BaseModel):
     tools: list[Tool] | None = None
     thinking: ThinkingConfig | None = None
     tool_choice: dict[str, Any] | None = None
+    target_provider_type: str | None = None
 
-    @field_validator("model")
-    @classmethod
-    def validate_model_field(cls, v, info):
-        """Map any Claude model name to the configured model."""
+    @model_validator(mode="after")
+    def map_model(self) -> TokenCountRequest:
+        """Map Claude model aliases to configured provider model for counting."""
         settings = get_settings()
-        # Use centralized model normalization
-        return normalize_model_name(
-            v,
+        resolved = resolve_model_target(
+            self.model,
             default_model=settings.model,
             opus_model=settings.opus_model,
             sonnet_model=settings.sonnet_model,
             haiku_model=settings.haiku_model,
         )
+        self.target_provider_type = resolved.provider_type
+        self.model = resolved.provider_model
+        return self

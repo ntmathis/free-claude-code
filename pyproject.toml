@@ -27,6 +27,12 @@ voice = [
     "librosa>=0.10.0",
 ]
 
+[project.scripts]
+free-claude-server = "api.cli:main"
+
+[tool.uv]
+package = true
+
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }
 

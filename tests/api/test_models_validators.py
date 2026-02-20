@@ -8,10 +8,9 @@ from config.settings import Settings
 
 @pytest.fixture
 def mock_settings():
-    settings = Settings()
-    settings.model = "target-model-from-settings"
-    settings.opus_model = "opus-from-settings"
-    settings.sonnet_model = "sonnet-from-settings"
+    settings = Settings(model="nvidia_nim/target-model-from-settings")
+    settings.opus_model = "open_router/opus-from-settings"
+    settings.sonnet_model = "nvidia_nim/sonnet-from-settings"
     settings.haiku_model = None
     return settings
 
@@ -25,6 +24,7 @@ def test_messages_request_map_model_claude_to_default(mock_settings):
         )
 
         assert request.model == "opus-from-settings"
+        assert request.target_provider_type == "open_router"
         assert request.original_model == "claude-3-opus"
 
 
@@ -38,6 +38,7 @@ def test_messages_request_map_model_non_claude_unchanged(mock_settings):
 
         # normalize_model_name returns original if not Claude
         assert request.model == "gpt-4"
+        assert request.target_provider_type == "nvidia_nim"
 
 
 def test_messages_request_map_model_with_provider_prefix(mock_settings):
@@ -50,6 +51,7 @@ def test_messages_request_map_model_with_provider_prefix(mock_settings):
 
         # Since haiku_model is None in mock_settings, maps to default
         assert request.model == "target-model-from-settings"
+        assert request.target_provider_type == "nvidia_nim"
 
 
 def test_token_count_request_model_validation(mock_settings):
@@ -59,6 +61,7 @@ def test_token_count_request_model_validation(mock_settings):
         )
 
         assert request.model == "sonnet-from-settings"
+        assert request.target_provider_type == "nvidia_nim"
 
 
 def test_messages_request_model_mapping_logs(mock_settings):

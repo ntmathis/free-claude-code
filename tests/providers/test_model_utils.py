@@ -4,6 +4,7 @@ from providers.model_utils import (
     get_original_model,
     is_claude_model,
     normalize_model_name,
+    resolve_model_target,
     strip_provider_prefixes,
 )
 
@@ -65,8 +66,39 @@ def test_get_original_model():
 
 
 def test_normalize_model_name_without_default(monkeypatch):
-    monkeypatch.setenv("MODEL", "env-default-model")
-    assert normalize_model_name("claude-3") == "env-default-model"
+    monkeypatch.setenv("MODEL", "nvidia_nim/env-default-model")
+    assert normalize_model_name("claude-3") == "nvidia_nim/env-default-model"
+
+
+def test_resolve_model_target_from_claude_uses_specific_provider():
+    resolved = resolve_model_target(
+        "claude-3-opus",
+        default_model="nvidia_nim/default-model",
+        opus_model="open_router/anthropic/claude-3-opus",
+        sonnet_model="nvidia_nim/sonnet-model",
+        haiku_model="lmstudio/haiku-model",
+    )
+    assert resolved.provider_type == "open_router"
+    assert resolved.provider_model == "anthropic/claude-3-opus"
+    assert resolved.mapped_model == "open_router/anthropic/claude-3-opus"
+
+
+def test_resolve_model_target_non_claude_uses_default_provider():
+    resolved = resolve_model_target(
+        "gpt-4o-mini",
+        default_model="nvidia_nim/stepfun-ai/step-3.5-flash",
+    )
+    assert resolved.provider_type == "nvidia_nim"
+    assert resolved.provider_model == "gpt-4o-mini"
+
+
+def test_resolve_model_target_prefixed_non_claude_uses_explicit_provider():
+    resolved = resolve_model_target(
+        "lmstudio/lmstudio-community/qwen2.5-7b-instruct",
+        default_model="nvidia_nim/stepfun-ai/step-3.5-flash",
+    )
+    assert resolved.provider_type == "lmstudio"
+    assert resolved.provider_model == "lmstudio-community/qwen2.5-7b-instruct"
 
 
 # --- Parametrized Edge Case Tests ---

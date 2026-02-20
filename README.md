@@ -68,7 +68,7 @@ Choose your provider and edit `.env`:
 ```dotenv
 PROVIDER_TYPE=nvidia_nim
 NVIDIA_NIM_API_KEY=nvapi-your-key-here
-MODEL=stepfun-ai/step-3.5-flash
+MODEL=nvidia_nim/stepfun-ai/step-3.5-flash
 ```
 
 </details>
@@ -79,7 +79,7 @@ MODEL=stepfun-ai/step-3.5-flash
 ```dotenv
 PROVIDER_TYPE=open_router
 OPENROUTER_API_KEY=sk-or-your-key-here
-MODEL=stepfun/step-3.5-flash:free
+MODEL=open_router/stepfun/step-3.5-flash:free
 ```
 
 </details>
@@ -89,7 +89,7 @@ MODEL=stepfun/step-3.5-flash:free
 
 ```dotenv
 PROVIDER_TYPE=lmstudio
-MODEL=lmstudio-community/qwen2.5-7b-instruct
+MODEL=lmstudio/lmstudio-community/qwen2.5-7b-instruct
 ```
 
 </details>
@@ -99,7 +99,7 @@ MODEL=lmstudio-community/qwen2.5-7b-instruct
 **Terminal 1** — Start the proxy server:
 
 ```bash
-uv run uvicorn server:app --host 0.0.0.0 --port 8082
+uv run free-claude-server
 ```
 
 **Terminal 2** — Run Claude Code:
@@ -205,9 +205,9 @@ Switch providers by changing `PROVIDER_TYPE` in `.env`:
 | OpenRouter | `open_router`   | `OPENROUTER_API_KEY` | `openrouter.ai/api/v1`        |
 | LM Studio  | `lmstudio`      | (none)               | `localhost:1234/v1`           |
 
-OpenRouter gives access to hundreds of models (StepFun, OpenAI, Anthropic, etc.) through a single API. Set `MODEL` to any OpenRouter model ID.
+OpenRouter gives access to hundreds of models (StepFun, OpenAI, Anthropic, etc.) through a single API. Set `MODEL` to `open_router/<model-id>`.
 
-LM Studio runs locally — start the server in LM Studio's Developer tab or via `lms server start`, load a model, and set `MODEL` to the model identifier.
+LM Studio runs locally — start the server in LM Studio's Developer tab or via `lms server start`, load a model, and set `MODEL` to `lmstudio/<model-id>`.
 
 ---
 
@@ -248,7 +248,7 @@ ALLOWED_DIR=C:/Users/yourname/projects
 4. **Start the server:**
 
 ```bash
-uv run uvicorn server:app --host 0.0.0.0 --port 8082
+uv run free-claude-server
 ```
 
 5. **Invite the bot** to your server (OAuth2 → URL Generator, scopes: `bot`, permissions: Read Messages, Send Messages, Manage Messages, Read Message History). Send a message in an allowed channel with a task. Claude responds with thinking tokens, tool calls as they execute, and the final result. Reply to messages to cancel tasks or clear branches (see Commands above).
@@ -330,7 +330,7 @@ Browse free models: [https://openrouter.ai/collections/free-models](https://open
 <details>
 <summary><b>LM Studio</b></summary>
 
-Run models locally with [LM Studio](https://lmstudio.ai). Load a model in the Chat or Developer tab, then set `MODEL` to its identifier.
+Run models locally with [LM Studio](https://lmstudio.ai). Load a model in the Chat or Developer tab, then set `MODEL` to `lmstudio/<model-id>`.
 
 Examples (native tool-use support):
 
@@ -349,7 +349,7 @@ Browse: [model.lmstudio.ai](https://model.lmstudio.ai)
 | Variable                          | Description                                          | Default                     |
 | --------------------------------- | ---------------------------------------------------- | --------------------------- |
 | `PROVIDER_TYPE`                   | Provider: `nvidia_nim`, `open_router`, or `lmstudio` | `nvidia_nim`                |
-| `MODEL`                           | Model to use for all requests                        | `stepfun-ai/step-3.5-flash` |
+| `MODEL`                           | Model to use for all requests (`provider/model`)     | `nvidia_nim/stepfun-ai/step-3.5-flash` |
 | `NVIDIA_NIM_API_KEY`              | NVIDIA API key (NIM provider)                        | required                    |
 | `OPENROUTER_API_KEY`              | OpenRouter API key (OpenRouter provider)             | required                    |
 | `LM_STUDIO_BASE_URL`              | LM Studio server URL                                 | `http://localhost:1234/v1`  |

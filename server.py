@@ -2,7 +2,7 @@
 Claude Code Proxy - Entry Point
 
 Minimal entry point that imports the app from the api module.
-Run with: uv run uvicorn server:app --host 0.0.0.0 --port 8082 --timeout-graceful-shutdown 5
+Preferred run command: uv run free-claude-server
 """
 
 from api.app import app, create_app

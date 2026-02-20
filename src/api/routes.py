@@ -12,7 +12,7 @@ from providers.base import BaseProvider
 from providers.exceptions import InvalidRequestError, ProviderError
 from providers.logging_utils import build_request_summary, log_request_compact
 
-from .dependencies import get_provider, get_settings
+from .dependencies import get_provider, get_provider_for_type, get_settings
 from .models.anthropic import MessagesRequest, TokenCountRequest
 from .models.responses import TokenCountResponse
 from .optimization_handlers import try_optimizations
@@ -45,6 +45,9 @@ async def create_message(
 
         request_id = f"req_{uuid.uuid4().hex[:12]}"
         log_request_compact(logger, request_id, request_data)
+        provider_type = request_data.target_provider_type or settings.provider_type
+        if provider_type != settings.provider_type:
+            provider = get_provider_for_type(provider_type)
 
         input_tokens = get_token_count(
             request_data.messages, request_data.system, request_data.tools

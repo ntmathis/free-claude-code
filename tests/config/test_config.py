@@ -328,3 +328,25 @@ class TestSettingsOptionalStr:
         monkeypatch.setenv(model_env, "")
         with pytest.raises(ValidationError, match="cannot be empty"):
             Settings()
+
+    def test_unprefixed_model_rejected(self):
+        """MODEL must be in canonical provider/model format."""
+        from config.settings import Settings
+
+        with pytest.raises(ValidationError, match="provider prefix"):
+            Settings(model="stepfun-ai/step-3.5-flash")
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "nvidia_nim/stepfun-ai/step-3.5-flash",
+            "open_router/anthropic/claude-3-opus",
+            "lmstudio/lmstudio-community/qwen2.5-7b-instruct",
+        ],
+    )
+    def test_prefixed_model_accepted(self, model):
+        """Canonical provider prefixes are accepted for MODEL."""
+        from config.settings import Settings
+
+        settings = Settings(model=model)
+        assert settings.model == model

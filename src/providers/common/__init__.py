@@ -7,10 +7,16 @@ from .message_converter import (
     get_block_attr,
     get_block_type,
 )
+from .model_routing import (
+    VALID_PROVIDER_TYPES,
+    is_valid_provider_type,
+    parse_prefixed_model,
+)
 from .sse_builder import ContentBlockManager, SSEBuilder, map_stop_reason
 from .think_parser import ContentChunk, ContentType, ThinkTagParser
 
 __all__ = [
+    "VALID_PROVIDER_TYPES",
     "AnthropicToOpenAIConverter",
     "ContentBlockManager",
     "ContentChunk",
@@ -20,6 +26,8 @@ __all__ = [
     "ThinkTagParser",
     "get_block_attr",
     "get_block_type",
+    "is_valid_provider_type",
     "map_error",
     "map_stop_reason",
+    "parse_prefixed_model",
 ]

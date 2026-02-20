@@ -4,12 +4,24 @@ Centralizes model name mapping logic to avoid duplication across the codebase.
 """
 
 import os
+from dataclasses import dataclass
+
+from providers.common.model_routing import parse_prefixed_model
 
 # Provider prefixes to strip from model names
 _PROVIDER_PREFIXES = ["anthropic/", "openai/", "gemini/"]
 
 # Claude model identifiers
 _CLAUDE_IDENTIFIERS = ["haiku", "sonnet", "opus", "claude"]
+
+
+@dataclass(frozen=True)
+class ResolvedModelTarget:
+    """Resolved target for a request after model mapping."""
+
+    provider_type: str
+    provider_model: str
+    mapped_model: str
 
 
 def strip_provider_prefixes(model: str) -> str:
@@ -81,10 +93,43 @@ def normalize_model_name(
 
         if default_model is None:
             # Use environment/config default
-            default_model = os.getenv("MODEL", "moonshotai/kimi-k2-thinking")
+            default_model = os.getenv("MODEL", "nvidia_nim/moonshotai/kimi-k2-thinking")
         return default_model
 
     return model
+
+
+def resolve_model_target(
+    model: str,
+    default_model: str | None = None,
+    opus_model: str | None = None,
+    sonnet_model: str | None = None,
+    haiku_model: str | None = None,
+) -> ResolvedModelTarget:
+    """Resolve provider type and provider-local model id for a request model."""
+    mapped_model = normalize_model_name(
+        model,
+        default_model=default_model,
+        opus_model=opus_model,
+        sonnet_model=sonnet_model,
+        haiku_model=haiku_model,
+    )
+
+    if default_model is None:
+        default_model = os.getenv("MODEL", "nvidia_nim/moonshotai/kimi-k2-thinking")
+    default_provider, _ = parse_prefixed_model(default_model)
+
+    try:
+        provider_type, provider_model = parse_prefixed_model(mapped_model)
+    except ValueError:
+        provider_type = default_provider
+        provider_model = mapped_model
+
+    return ResolvedModelTarget(
+        provider_type=provider_type,
+        provider_model=provider_model,
+        mapped_model=mapped_model,
+    )
 
 
 def get_original_model(model: str) -> str:

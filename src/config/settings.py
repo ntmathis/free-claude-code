@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from providers.common.model_routing import parse_prefixed_model
+
 from .nim import NimSettings
 
 load_dotenv()
@@ -41,7 +43,7 @@ class Settings(BaseSettings):
 
     # ==================== Model ====================
     # Default model for all Claude model requests if specific overrides aren't provided
-    model: str = "stepfun-ai/step-3.5-flash"
+    model: str = "nvidia_nim/stepfun-ai/step-3.5-flash"
 
     # Specific Claude model overrides
     opus_model: str | None = Field(default=None, validation_alias="OPUS_MODEL")
@@ -123,6 +125,7 @@ class Settings(BaseSettings):
         return v
 
     @field_validator(
+        "model",
         "opus_model",
         "sonnet_model",
         "haiku_model",
@@ -131,9 +134,16 @@ class Settings(BaseSettings):
     @classmethod
     def validate_model_override(cls, v, info):
         if v == "":
+            if info.field_name == "model":
+                raise ValueError("MODEL cannot be empty.")
             raise ValueError(
                 f"Specific model override '{info.field_name}' cannot be empty. Remove the key or specify a valid model."
             )
+        if v is None:
+            return v
+        if not isinstance(v, str):
+            return v
+        parse_prefixed_model(v)
         return v
 
     @field_validator("whisper_device")

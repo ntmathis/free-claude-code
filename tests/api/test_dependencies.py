@@ -3,7 +3,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from api.dependencies import cleanup_provider, get_provider, get_settings
+from api.dependencies import (
+    cleanup_provider,
+    get_provider,
+    get_provider_for_type,
+    get_settings,
+)
 from config.nim import NimSettings
 from providers.lmstudio import LMStudioProvider
 from providers.nvidia_nim import NvidiaNimProvider
@@ -31,8 +36,8 @@ def _make_mock_settings(**overrides):
 
 @pytest.fixture(autouse=True)
 def reset_provider():
-    """Reset the global _provider singleton between tests."""
-    with patch("api.dependencies._provider", None):
+    """Reset the global provider cache between tests."""
+    with patch("api.dependencies._providers", {}):
         yield
 
 
@@ -46,6 +51,21 @@ async def test_get_provider_singleton():
 
         assert isinstance(p1, NvidiaNimProvider)
         assert p1 is p2
+
+
+@pytest.mark.asyncio
+async def test_get_provider_for_type_caches_per_provider():
+    with patch("api.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value = _make_mock_settings()
+
+        n1 = get_provider_for_type("nvidia_nim")
+        n2 = get_provider_for_type("nvidia_nim")
+        o1 = get_provider_for_type("open_router")
+        o2 = get_provider_for_type("open_router")
+
+        assert n1 is n2
+        assert o1 is o2
+        assert n1 is not o1
 
 
 @pytest.mark.asyncio
@@ -91,7 +111,7 @@ async def test_get_provider_open_router():
     with patch("api.dependencies.get_settings") as mock_settings:
         mock_settings.return_value = _make_mock_settings(provider_type="open_router")
 
-        provider = get_provider()
+        provider = get_provider_for_type("open_router")
 
         assert isinstance(provider, OpenRouterProvider)
         assert provider._base_url == "https://openrouter.ai/api/v1"
@@ -104,7 +124,7 @@ async def test_get_provider_lmstudio():
     with patch("api.dependencies.get_settings") as mock_settings:
         mock_settings.return_value = _make_mock_settings(provider_type="lmstudio")
 
-        provider = get_provider()
+        provider = get_provider_for_type("lmstudio")
 
         assert isinstance(provider, LMStudioProvider)
         assert provider._base_url == "http://localhost:1234/v1"
@@ -120,7 +140,7 @@ async def test_get_provider_lmstudio_uses_lm_studio_base_url():
             lm_studio_base_url="http://custom:9999/v1",
         )
 
-        provider = get_provider()
+        provider = get_provider_for_type("lmstudio")
 
         assert isinstance(provider, LMStudioProvider)
         assert provider._base_url == "http://custom:9999/v1"
@@ -184,7 +204,7 @@ async def test_get_provider_open_router_missing_api_key():
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            get_provider()
+            get_provider_for_type("open_router")
 
         assert exc_info.value.status_code == 503
         assert "OPENROUTER_API_KEY" in exc_info.value.detail
@@ -198,7 +218,7 @@ async def test_get_provider_unknown_type():
         mock_settings.return_value = _make_mock_settings(provider_type="unknown")
 
         with pytest.raises(ValueError, match="Unknown provider_type"):
-            get_provider()
+            get_provider_for_type("unknown")
 
 
 @pytest.mark.asyncio

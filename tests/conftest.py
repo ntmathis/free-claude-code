@@ -8,7 +8,10 @@ import pytest
 
 # Set mock environment BEFORE any imports that use Settings
 os.environ.setdefault("NVIDIA_NIM_API_KEY", "test_key")
-os.environ.setdefault("MODEL", "test-model")
+os.environ["MODEL"] = "nvidia_nim/test-model"
+os.environ["OPUS_MODEL"] = "nvidia_nim/test-opus-model"
+os.environ["SONNET_MODEL"] = "nvidia_nim/test-sonnet-model"
+os.environ["HAIKU_MODEL"] = "nvidia_nim/test-haiku-model"
 os.environ["PTB_TIMEDELTA"] = "1"
 
 # Add project root to path
