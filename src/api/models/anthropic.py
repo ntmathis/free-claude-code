@@ -7,7 +7,7 @@ from loguru import logger
 from pydantic import BaseModel, model_validator
 
 from config.settings import get_settings
-from providers.model_utils import resolve_model_target
+from providers.model_utils import resolve_model_targets
 
 # =============================================================================
 # Content Block Types
@@ -105,6 +105,7 @@ class MessagesRequest(BaseModel):
     extra_body: dict[str, Any] | None = None
     original_model: str | None = None
     target_provider_type: str | None = None
+    target_candidates: list[dict[str, str]] | None = None
 
     @model_validator(mode="after")
     def map_model(self) -> MessagesRequest:
@@ -114,15 +115,24 @@ class MessagesRequest(BaseModel):
             self.original_model = self.model
 
         # Use centralized model normalization
-        resolved = resolve_model_target(
+        resolved_candidates = resolve_model_targets(
             self.model,
             default_model=settings.model,
             opus_model=settings.opus_model,
             sonnet_model=settings.sonnet_model,
             haiku_model=settings.haiku_model,
         )
-        self.target_provider_type = resolved.provider_type
-        self.model = resolved.provider_model
+        primary = resolved_candidates[0]
+        self.target_provider_type = primary.provider_type
+        self.model = primary.provider_model
+        self.target_candidates = [
+            {
+                "provider_type": candidate.provider_type,
+                "provider_model": candidate.provider_model,
+                "mapped_model": candidate.mapped_model,
+            }
+            for candidate in resolved_candidates
+        ]
 
         if self.model != self.original_model:
             logger.debug(f"MODEL MAPPING: '{self.original_model}' -> '{self.model}'")
@@ -143,13 +153,13 @@ class TokenCountRequest(BaseModel):
     def map_model(self) -> TokenCountRequest:
         """Map Claude model aliases to configured provider model for counting."""
         settings = get_settings()
-        resolved = resolve_model_target(
+        resolved = resolve_model_targets(
             self.model,
             default_model=settings.model,
             opus_model=settings.opus_model,
             sonnet_model=settings.sonnet_model,
             haiku_model=settings.haiku_model,
-        )
+        )[0]
         self.target_provider_type = resolved.provider_type
         self.model = resolved.provider_model
         return self

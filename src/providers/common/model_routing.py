@@ -21,3 +21,22 @@ def parse_prefixed_model(value: str) -> tuple[str, str]:
     if not provider_model.strip():
         raise ValueError("Model id cannot be empty after provider prefix.")
     return provider_type, provider_model
+
+
+def parse_prefixed_model_roster(value: str) -> list[tuple[str, str]]:
+    """Parse comma-separated `provider/model` entries into ordered candidates."""
+    candidates: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for raw_entry in value.split(","):
+        entry = raw_entry.strip()
+        if not entry:
+            raise ValueError(
+                "Model roster contains an empty entry. Remove extra commas."
+            )
+        parsed = parse_prefixed_model(entry)
+        if parsed not in seen:
+            seen.add(parsed)
+            candidates.append(parsed)
+
+    return candidates

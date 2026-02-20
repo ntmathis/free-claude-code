@@ -26,6 +26,8 @@ def test_messages_request_map_model_claude_to_default(mock_settings):
         assert request.model == "opus-from-settings"
         assert request.target_provider_type == "open_router"
         assert request.original_model == "claude-3-opus"
+        assert request.target_candidates is not None
+        assert request.target_candidates[0]["provider_type"] == "open_router"
 
 
 def test_messages_request_map_model_non_claude_unchanged(mock_settings):
@@ -36,7 +38,6 @@ def test_messages_request_map_model_non_claude_unchanged(mock_settings):
             messages=[Message(role="user", content="hello")],
         )
 
-        # normalize_model_name returns original if not Claude
         assert request.model == "gpt-4"
         assert request.target_provider_type == "nvidia_nim"
 
@@ -52,6 +53,23 @@ def test_messages_request_map_model_with_provider_prefix(mock_settings):
         # Since haiku_model is None in mock_settings, maps to default
         assert request.model == "target-model-from-settings"
         assert request.target_provider_type == "nvidia_nim"
+
+
+def test_messages_request_uses_ordered_roster_candidates(mock_settings):
+    mock_settings.sonnet_model = (
+        "open_router/anthropic/claude-3.5-sonnet,nvidia_nim/z-ai/glm4.7"
+    )
+    with patch("api.models.anthropic.get_settings", return_value=mock_settings):
+        request = MessagesRequest(
+            model="claude-3-sonnet",
+            max_tokens=100,
+            messages=[Message(role="user", content="hello")],
+        )
+
+        assert request.model == "anthropic/claude-3.5-sonnet"
+        assert request.target_provider_type == "open_router"
+        assert request.target_candidates is not None
+        assert request.target_candidates[1]["provider_model"] == "z-ai/glm4.7"
 
 
 def test_token_count_request_model_validation(mock_settings):

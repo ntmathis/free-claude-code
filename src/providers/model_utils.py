@@ -6,7 +6,10 @@ Centralizes model name mapping logic to avoid duplication across the codebase.
 import os
 from dataclasses import dataclass
 
-from providers.common.model_routing import parse_prefixed_model
+from providers.common.model_routing import (
+    parse_prefixed_model,
+    parse_prefixed_model_roster,
+)
 
 # Provider prefixes to strip from model names
 _PROVIDER_PREFIXES = ["anthropic/", "openai/", "gemini/"]
@@ -22,6 +25,21 @@ class ResolvedModelTarget:
     provider_type: str
     provider_model: str
     mapped_model: str
+
+
+def _resolve_roster(
+    roster: str,
+) -> list[ResolvedModelTarget]:
+    resolved: list[ResolvedModelTarget] = []
+    for provider_type, provider_model in parse_prefixed_model_roster(roster):
+        resolved.append(
+            ResolvedModelTarget(
+                provider_type=provider_type,
+                provider_model=provider_model,
+                mapped_model=f"{provider_type}/{provider_model}",
+            )
+        )
+    return resolved
 
 
 def strip_provider_prefixes(model: str) -> str:
@@ -78,25 +96,58 @@ def normalize_model_name(
     Returns:
         Normalized model name (original if not a Claude model, mapped if Claude)
     """
-    # Strip provider prefixes
+    return resolve_model_target(
+        model,
+        default_model=default_model,
+        opus_model=opus_model,
+        sonnet_model=sonnet_model,
+        haiku_model=haiku_model,
+    ).mapped_model
+
+
+def resolve_model_targets(
+    model: str,
+    default_model: str | None = None,
+    opus_model: str | None = None,
+    sonnet_model: str | None = None,
+    haiku_model: str | None = None,
+) -> list[ResolvedModelTarget]:
+    """Resolve ordered provider/model candidates for a request model."""
     clean = strip_provider_prefixes(model)
 
-    # Map Claude models to default
+    if default_model is None:
+        default_model = os.getenv("MODEL", "nvidia_nim/moonshotai/kimi-k2-thinking")
+    default_roster = _resolve_roster(default_model)
+    default_provider = default_roster[0].provider_type
+
     if is_claude_model(clean):
         clean_lower = clean.lower()
         if "opus" in clean_lower and opus_model is not None:
-            return opus_model
+            return _resolve_roster(opus_model)
         if "sonnet" in clean_lower and sonnet_model is not None:
-            return sonnet_model
+            return _resolve_roster(sonnet_model)
         if "haiku" in clean_lower and haiku_model is not None:
-            return haiku_model
+            return _resolve_roster(haiku_model)
+        return default_roster
 
-        if default_model is None:
-            # Use environment/config default
-            default_model = os.getenv("MODEL", "nvidia_nim/moonshotai/kimi-k2-thinking")
-        return default_model
+    try:
+        provider_type, provider_model = parse_prefixed_model(model)
+    except ValueError:
+        return [
+            ResolvedModelTarget(
+                provider_type=default_provider,
+                provider_model=model,
+                mapped_model=f"{default_provider}/{model}",
+            )
+        ]
 
-    return model
+    return [
+        ResolvedModelTarget(
+            provider_type=provider_type,
+            provider_model=provider_model,
+            mapped_model=f"{provider_type}/{provider_model}",
+        )
+    ]
 
 
 def resolve_model_target(
@@ -107,29 +158,13 @@ def resolve_model_target(
     haiku_model: str | None = None,
 ) -> ResolvedModelTarget:
     """Resolve provider type and provider-local model id for a request model."""
-    mapped_model = normalize_model_name(
+    return resolve_model_targets(
         model,
         default_model=default_model,
         opus_model=opus_model,
         sonnet_model=sonnet_model,
         haiku_model=haiku_model,
-    )
-
-    if default_model is None:
-        default_model = os.getenv("MODEL", "nvidia_nim/moonshotai/kimi-k2-thinking")
-    default_provider, _ = parse_prefixed_model(default_model)
-
-    try:
-        provider_type, provider_model = parse_prefixed_model(mapped_model)
-    except ValueError:
-        provider_type = default_provider
-        provider_model = mapped_model
-
-    return ResolvedModelTarget(
-        provider_type=provider_type,
-        provider_model=provider_model,
-        mapped_model=mapped_model,
-    )
+    )[0]
 
 
 def get_original_model(model: str) -> str:

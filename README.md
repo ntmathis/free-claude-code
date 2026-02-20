@@ -349,7 +349,10 @@ Browse: [model.lmstudio.ai](https://model.lmstudio.ai)
 | Variable                          | Description                                          | Default                     |
 | --------------------------------- | ---------------------------------------------------- | --------------------------- |
 | `PROVIDER_TYPE`                   | Provider: `nvidia_nim`, `open_router`, or `lmstudio` | `nvidia_nim`                |
-| `MODEL`                           | Model to use for all requests (`provider/model`)     | `nvidia_nim/stepfun-ai/step-3.5-flash` |
+| `MODEL`                           | Default model mapping (`provider/model` or comma-separated roster) | `nvidia_nim/stepfun-ai/step-3.5-flash` |
+| `OPUS_MODEL`                      | Optional Claude Opus mapping (`provider/model` or roster) | unset                       |
+| `SONNET_MODEL`                    | Optional Claude Sonnet mapping (`provider/model` or roster) | unset                       |
+| `HAIKU_MODEL`                     | Optional Claude Haiku mapping (`provider/model` or roster) | unset                       |
 | `NVIDIA_NIM_API_KEY`              | NVIDIA API key (NIM provider)                        | required                    |
 | `OPENROUTER_API_KEY`              | OpenRouter API key (OpenRouter provider)             | required                    |
 | `LM_STUDIO_BASE_URL`              | LM Studio server URL                                 | `http://localhost:1234/v1`  |
@@ -364,6 +367,8 @@ Browse: [model.lmstudio.ai](https://model.lmstudio.ai)
 | `ENABLE_TITLE_GENERATION_SKIP`    | Skip title generation                                | `true`                      |
 | `ENABLE_SUGGESTION_MODE_SKIP`     | Skip suggestion mode                                 | `true`                      |
 | `ENABLE_FILEPATH_EXTRACTION_MOCK` | Enable filepath extraction mock                      | `true`                      |
+
+When a model variable uses a roster, candidates are tried in order. Failover only happens before the first streamed event and only for transient failures (rate limits, timeouts, and 5xx/overload responses).
 | `MESSAGING_PLATFORM`              | Messaging platform: `discord` or `telegram`          | `discord`                   |
 | `DISCORD_BOT_TOKEN`               | Discord Bot Token                                    | `""`                        |
 | `ALLOWED_DISCORD_CHANNELS`        | Comma-separated channel IDs (empty = none allowed)   | `""`                        |

@@ -342,6 +342,7 @@ class TestSettingsOptionalStr:
             "nvidia_nim/stepfun-ai/step-3.5-flash",
             "open_router/anthropic/claude-3-opus",
             "lmstudio/lmstudio-community/qwen2.5-7b-instruct",
+            "open_router/anthropic/claude-3-opus,nvidia_nim/z-ai/glm4.7",
         ],
     )
     def test_prefixed_model_accepted(self, model):
@@ -350,3 +351,22 @@ class TestSettingsOptionalStr:
 
         settings = Settings(model=model)
         assert settings.model == model
+
+    def test_model_roster_with_empty_entry_rejected(self):
+        """MODEL roster cannot contain empty entries."""
+        from config.settings import Settings
+
+        with pytest.raises(ValidationError, match="empty entry"):
+            Settings(model="open_router/anthropic/claude-3-opus,")
+
+    def test_specific_model_roster_accepted(self, monkeypatch):
+        """Specific Claude overrides also support roster format."""
+        from config.settings import Settings
+
+        monkeypatch.setenv(
+            "SONNET_MODEL",
+            "open_router/anthropic/claude-3.5-sonnet,nvidia_nim/z-ai/glm4.7",
+        )
+        settings = Settings(model="nvidia_nim/default-model")
+        assert settings.sonnet_model is not None
+        assert "open_router/anthropic/claude-3.5-sonnet" in settings.sonnet_model

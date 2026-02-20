@@ -37,6 +37,7 @@ class BaseProvider(ABC):
         input_tokens: int = 0,
         *,
         request_id: str | None = None,
+        raise_errors: bool = False,
     ) -> AsyncIterator[str]:
         """Stream response in Anthropic SSE format."""
         if False:

@@ -2,6 +2,7 @@
 
 import json
 import uuid
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -9,6 +10,7 @@ from loguru import logger
 
 from config.settings import Settings
 from providers.base import BaseProvider
+from providers.common import is_failover_retryable
 from providers.exceptions import InvalidRequestError, ProviderError
 from providers.logging_utils import build_request_summary, log_request_compact
 
@@ -19,6 +21,17 @@ from .optimization_handlers import try_optimizations
 from .request_utils import get_token_count
 
 router = APIRouter()
+
+
+def _build_sse_error_event(exc: Exception) -> str:
+    if isinstance(exc, ProviderError):
+        payload = exc.to_anthropic_format()
+    else:
+        payload = {
+            "type": "error",
+            "error": {"type": "api_error", "message": str(exc)},
+        }
+    return f"event: error\ndata: {json.dumps(payload)}\n\n"
 
 
 # =============================================================================
@@ -45,26 +58,108 @@ async def create_message(
 
         request_id = f"req_{uuid.uuid4().hex[:12]}"
         log_request_compact(logger, request_id, request_data)
-        provider_type = request_data.target_provider_type or settings.provider_type
-        if provider_type != settings.provider_type:
-            provider = get_provider_for_type(provider_type)
-
         input_tokens = get_token_count(
             request_data.messages, request_data.system, request_data.tools
         )
-        return StreamingResponse(
-            provider.stream_response(
-                request_data,
+        candidates = request_data.target_candidates or [
+            {
+                "provider_type": request_data.target_provider_type
+                or settings.provider_type,
+                "provider_model": request_data.model,
+                "mapped_model": (
+                    f"{request_data.target_provider_type or settings.provider_type}/"
+                    f"{request_data.model}"
+                ),
+            }
+        ]
+
+        last_exc: Exception | None = None
+        for idx, candidate in enumerate(candidates):
+            provider_type = candidate["provider_type"]
+            provider_model = candidate["provider_model"]
+            is_last = idx == len(candidates) - 1
+
+            route_provider = provider
+            if provider_type != settings.provider_type:
+                route_provider = get_provider_for_type(provider_type)
+
+            candidate_request = request_data.model_copy(deep=True)
+            candidate_request.model = provider_model
+            candidate_request.target_provider_type = provider_type
+
+            stream = route_provider.stream_response(
+                candidate_request,
                 input_tokens=input_tokens,
                 request_id=request_id,
-            ),
-            media_type="text/event-stream",
-            headers={
-                "X-Accel-Buffering": "no",
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-            },
-        )
+                raise_errors=True,
+            )
+
+            try:
+                first_event = await stream.__anext__()
+            except StopAsyncIteration:
+                continue
+            except Exception as exc:
+                last_exc = exc
+                if not is_last and is_failover_retryable(exc):
+                    logger.warning(
+                        "MODEL_FAILOVER: request_id=%s attempt=%d/%d failed provider=%s model=%s error=%s",
+                        request_id,
+                        idx + 1,
+                        len(candidates),
+                        provider_type,
+                        provider_model,
+                        type(exc).__name__,
+                    )
+                    continue
+                raise
+
+            async def stream_with_first(
+                first: str = first_event,
+                source: AsyncIterator[str] = stream,
+                active_provider_type: str = provider_type,
+                active_provider_model: str = provider_model,
+            ) -> AsyncIterator[str]:
+                emitted_content = "event: content_block_delta" in first
+                yield first
+                try:
+                    async for event in source:
+                        if "event: content_block_delta" in event:
+                            emitted_content = True
+                        yield event
+                except Exception as exc:
+                    logger.error(
+                        "STREAM_ERROR_AFTER_START: request_id=%s provider=%s model=%s error=%s",
+                        request_id,
+                        active_provider_type,
+                        active_provider_model,
+                        type(exc).__name__,
+                    )
+                    if not emitted_content:
+                        yield _build_sse_error_event(exc)
+
+            if idx > 0:
+                logger.info(
+                    "MODEL_FAILOVER: request_id=%s using fallback attempt=%d/%d provider=%s model=%s",
+                    request_id,
+                    idx + 1,
+                    len(candidates),
+                    provider_type,
+                    provider_model,
+                )
+
+            return StreamingResponse(
+                stream_with_first(),
+                media_type="text/event-stream",
+                headers={
+                    "X-Accel-Buffering": "no",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
+            )
+
+        if last_exc is not None:
+            raise last_exc
+        raise HTTPException(status_code=500, detail="No model candidates available.")
 
     except ProviderError:
         raise

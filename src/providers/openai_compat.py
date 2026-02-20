@@ -116,11 +116,12 @@ class OpenAICompatibleProvider(BaseProvider):
         input_tokens: int = 0,
         *,
         request_id: str | None = None,
+        raise_errors: bool = False,
     ) -> AsyncIterator[str]:
         """Stream response in Anthropic SSE format."""
         with logger.contextualize(request_id=request_id):
             async for event in self._stream_response_impl(
-                request, input_tokens, request_id
+                request, input_tokens, request_id, raise_errors
             ):
                 yield event
 
@@ -129,6 +130,7 @@ class OpenAICompatibleProvider(BaseProvider):
         request: Any,
         input_tokens: int,
         request_id: str | None,
+        raise_errors: bool,
     ) -> AsyncIterator[str]:
         """Shared streaming implementation."""
         tag = self._provider_name
@@ -146,7 +148,7 @@ class OpenAICompatibleProvider(BaseProvider):
             len(body.get("tools", [])),
         )
 
-        yield sse.message_start()
+        message_started = False
 
         think_parser = ThinkTagParser()
         heuristic_parser = HeuristicToolParser()
@@ -162,6 +164,10 @@ class OpenAICompatibleProvider(BaseProvider):
                     self._client.chat.completions.create, **body, stream=True
                 )
                 async for chunk in stream:
+                    if not message_started:
+                        yield sse.message_start()
+                        message_started = True
+
                     if getattr(chunk, "usage", None):
                         usage_info = chunk.usage
 
@@ -247,6 +253,10 @@ class OpenAICompatibleProvider(BaseProvider):
                 req_tag = f" request_id={request_id}" if request_id else ""
                 logger.error("%s_ERROR:%s %s: %s", tag, req_tag, type(e).__name__, e)
                 mapped_e = map_error(e)
+                # For failover probing we only want exceptions before first emitted event.
+                # After streaming starts, emit SSE error instead of aborting socket.
+                if raise_errors and not message_started:
+                    raise mapped_e from e
                 error_occurred = True
                 error_message = str(mapped_e)
                 logger.info(
@@ -255,10 +265,17 @@ class OpenAICompatibleProvider(BaseProvider):
                     type(e).__name__,
                     req_tag,
                 )
+                if not message_started:
+                    yield sse.message_start()
+                    message_started = True
                 for event in sse.close_content_blocks():
                     yield event
                 for event in sse.emit_error(error_message):
                     yield event
+
+        if not message_started:
+            yield sse.message_start()
+            message_started = True
 
         # Flush remaining content
         remaining = think_parser.flush()

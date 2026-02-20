@@ -5,6 +5,7 @@ from providers.model_utils import (
     is_claude_model,
     normalize_model_name,
     resolve_model_target,
+    resolve_model_targets,
     strip_provider_prefixes,
 )
 
@@ -26,25 +27,26 @@ def test_is_claude_model():
 
 
 def test_normalize_model_name_claude_maps_to_default():
-    default = "target-model"
+    default = "nvidia_nim/target-model"
     # Strips prefix AND maps to default
     assert normalize_model_name("anthropic/claude-3-sonnet", default) == default
     assert normalize_model_name("claude-3-opus", default) == default
 
 
 def test_normalize_model_name_non_claude_unchanged():
-    default = "target-model"
-    assert normalize_model_name("gpt-4", default) == "gpt-4"
+    default = "nvidia_nim/target-model"
+    assert normalize_model_name("gpt-4", default) == "nvidia_nim/gpt-4"
     assert (
-        normalize_model_name("openai/gpt-3.5-turbo", default) == "openai/gpt-3.5-turbo"
+        normalize_model_name("openai/gpt-3.5-turbo", default)
+        == "nvidia_nim/openai/gpt-3.5-turbo"
     )
 
 
 def test_normalize_model_name_specific_overrides():
-    default = "target-model"
-    opus = "opus-replacement"
-    sonnet = "sonnet-replacement"
-    haiku = "haiku-replacement"
+    default = "nvidia_nim/target-model"
+    opus = "open_router/opus-replacement"
+    sonnet = "nvidia_nim/sonnet-replacement"
+    haiku = "lmstudio/haiku-replacement"
 
     # Specific overrides match based on the substring in the clean model name
     assert normalize_model_name("claude-3-opus", default, opus_model=opus) == opus
@@ -99,6 +101,19 @@ def test_resolve_model_target_prefixed_non_claude_uses_explicit_provider():
     )
     assert resolved.provider_type == "lmstudio"
     assert resolved.provider_model == "lmstudio-community/qwen2.5-7b-instruct"
+
+
+def test_resolve_model_targets_uses_roster_order():
+    resolved = resolve_model_targets(
+        "claude-3-sonnet",
+        default_model="nvidia_nim/default-model,nvidia_nim/default-model-2",
+        sonnet_model=("open_router/anthropic/claude-3.5-sonnet,nvidia_nim/z-ai/glm4.7"),
+    )
+    assert [item.provider_type for item in resolved] == ["open_router", "nvidia_nim"]
+    assert [item.provider_model for item in resolved] == [
+        "anthropic/claude-3.5-sonnet",
+        "z-ai/glm4.7",
+    ]
 
 
 # --- Parametrized Edge Case Tests ---
@@ -167,11 +182,23 @@ def test_is_claude_model_parametrized(model, expected):
 @pytest.mark.parametrize(
     "model,default,expected",
     [
-        ("claude-3-sonnet", "target", "target"),
-        ("anthropic/claude-3-opus", "target", "target"),
-        ("gpt-4", "target", "gpt-4"),
-        ("openai/gpt-3.5-turbo", "target", "openai/gpt-3.5-turbo"),
-        ("", "target", ""),  # empty string is not a claude model
+        (
+            "claude-3-sonnet",
+            "nvidia_nim/target",
+            "nvidia_nim/target",
+        ),
+        (
+            "anthropic/claude-3-opus",
+            "nvidia_nim/target",
+            "nvidia_nim/target",
+        ),
+        ("gpt-4", "nvidia_nim/target", "nvidia_nim/gpt-4"),
+        (
+            "openai/gpt-3.5-turbo",
+            "nvidia_nim/target",
+            "nvidia_nim/openai/gpt-3.5-turbo",
+        ),
+        ("", "nvidia_nim/target", "nvidia_nim/"),  # empty string is not a claude model
     ],
     ids=[
         "claude_mapped",

@@ -1,6 +1,6 @@
 import pytest
 
-from providers.common import parse_prefixed_model
+from providers.common import parse_prefixed_model, parse_prefixed_model_roster
 
 
 def test_parse_prefixed_model_valid():
@@ -22,3 +22,35 @@ def test_parse_prefixed_model_valid():
 def test_parse_prefixed_model_invalid(value):
     with pytest.raises(ValueError):
         parse_prefixed_model(value)
+
+
+def test_parse_prefixed_model_roster_valid():
+    roster = parse_prefixed_model_roster(
+        "open_router/anthropic/claude-3-opus, nvidia_nim/z-ai/glm4.7"
+    )
+    assert roster == [
+        ("open_router", "anthropic/claude-3-opus"),
+        ("nvidia_nim", "z-ai/glm4.7"),
+    ]
+
+
+def test_parse_prefixed_model_roster_deduplicates_stably():
+    roster = parse_prefixed_model_roster(
+        "open_router/anthropic/claude-3-opus,open_router/anthropic/claude-3-opus,nvidia_nim/z-ai/glm4.7"
+    )
+    assert roster == [
+        ("open_router", "anthropic/claude-3-opus"),
+        ("nvidia_nim", "z-ai/glm4.7"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "open_router/anthropic/claude-3-opus,",
+        "open_router/anthropic/claude-3-opus,,nvidia_nim/z-ai/glm4.7",
+    ],
+)
+def test_parse_prefixed_model_roster_invalid_empty_entry(value):
+    with pytest.raises(ValueError):
+        parse_prefixed_model_roster(value)

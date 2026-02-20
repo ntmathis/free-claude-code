@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from providers.common.model_routing import parse_prefixed_model
+from providers.common.model_routing import parse_prefixed_model_roster
 
 from .nim import NimSettings
 
@@ -143,7 +143,7 @@ class Settings(BaseSettings):
             return v
         if not isinstance(v, str):
             return v
-        parse_prefixed_model(v)
+        parse_prefixed_model_roster(v)
         return v
 
     @field_validator("whisper_device")
