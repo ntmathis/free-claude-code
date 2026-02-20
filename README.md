@@ -350,11 +350,11 @@ Browse: [model.lmstudio.ai](https://model.lmstudio.ai)
 | --------------------------------- | ---------------------------------------------------- | --------------------------- |
 | `PROVIDER_TYPE`                   | Provider: `nvidia_nim`, `open_router`, or `lmstudio` | `nvidia_nim`                |
 | `MODEL`                           | Default model mapping (`provider/model` or comma-separated roster) | `nvidia_nim/stepfun-ai/step-3.5-flash` |
-| `OPUS_MODEL`                      | Optional Claude Opus mapping (`provider/model` or roster) | unset                       |
-| `SONNET_MODEL`                    | Optional Claude Sonnet mapping (`provider/model` or roster) | unset                       |
-| `HAIKU_MODEL`                     | Optional Claude Haiku mapping (`provider/model` or roster) | unset                       |
-| `NVIDIA_NIM_API_KEY`              | NVIDIA API key (NIM provider)                        | required                    |
-| `OPENROUTER_API_KEY`              | OpenRouter API key (OpenRouter provider)             | required                    |
+| `OPUS_MODEL`                      | Optional Claude Opus mapping (`provider/model` or roster) | `nvidia_nim/z-ai/glm5,nvidia_nim/moonshotai/kimi-k2.5,nvidia_nim/z-ai/glm4.7` |
+| `SONNET_MODEL`                    | Optional Claude Sonnet mapping (`provider/model` or roster) | `open_router/stepfun/step-3.5-flash:free,nvidia_nim/nvidia/nemotron-3-nano-30b-a3b` |
+| `HAIKU_MODEL`                     | Optional Claude Haiku mapping (`provider/model` or roster) | `nvidia_nim/nvidia/nemotron-3-nano-30b-a3b` |
+| `NVIDIA_NIM_API_KEY`              | NVIDIA API key (NIM provider)                        | `""`                        |
+| `OPENROUTER_API_KEY`              | OpenRouter API key (OpenRouter provider)             | `""`                        |
 | `LM_STUDIO_BASE_URL`              | LM Studio server URL                                 | `http://localhost:1234/v1`  |
 | `PROVIDER_RATE_LIMIT`             | LLM API requests per window                          | `40`                        |
 | `PROVIDER_RATE_WINDOW`            | Rate limit window (seconds)                          | `60`                        |
@@ -372,7 +372,7 @@ Browse: [model.lmstudio.ai](https://model.lmstudio.ai)
 | `ALLOWED_DISCORD_CHANNELS`        | Comma-separated channel IDs (empty = none allowed)   | `""`                        |
 | `TELEGRAM_BOT_TOKEN`              | Telegram Bot Token                                   | `""`                        |
 | `ALLOWED_TELEGRAM_USER_ID`        | Allowed Telegram User ID                             | `""`                        |
-| `VOICE_NOTE_ENABLED`              | Enable voice note handling                           | `true`                      |
+| `VOICE_NOTE_ENABLED`              | Enable voice note handling                           | `false`                     |
 | `WHISPER_MODEL`                   | Local Whisper model size                             | `base`                      |
 | `WHISPER_DEVICE`                  | `cpu` \| `cuda`                                      | `cpu`                       |
 | `MESSAGING_RATE_LIMIT`            | Messaging messages per window                        | `1`                         |
@@ -381,6 +381,7 @@ Browse: [model.lmstudio.ai](https://model.lmstudio.ai)
 | `ALLOWED_DIR`                     | Allowed directories for agent                        | `""`                        |
 
 When a model variable uses a roster, candidates are tried in order. Failover only happens before the first streamed event and only for transient failures (rate limits, timeouts, and 5xx/overload responses).
+Example roster: `OPUS_MODEL="nvidia_nim/z-ai/glm5,nvidia_nim/moonshotai/kimi-k2.5,open_router/anthropic/claude-3.5-sonnet"`
 
 See [`.env.example`](.env.example) for all supported parameters.
 
