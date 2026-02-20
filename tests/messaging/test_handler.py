@@ -641,3 +641,57 @@ async def test_handle_message_clear_command_reply_pending_voice_cancels(
     assert set(deleted_ids) == {"100", "101", "150"}
     call_args = mock_platform.queue_send_message.call_args[0]
     assert "Voice note cancelled" in call_args[1]
+
+
+@pytest.mark.asyncio
+
+
+@pytest.mark.asyncio
+
+
+@pytest.mark.asyncio
+async def test_handle_stats_command_uses_embed_when_available():
+    """Test that /stats uses send_stats_embed if platform supports it."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    # Create a mock platform that has get_uptime and send_stats_embed
+    mock_platform = MagicMock()
+    mock_platform.get_uptime.return_value = "1s"
+    mock_platform.send_stats_embed = AsyncMock()
+
+    # Mock cli_manager, tree_queue, session_store
+    mock_cli_manager = MagicMock()
+    mock_cli_manager.get_stats.return_value = {'active_sessions': 2}
+    mock_tree_queue = MagicMock()
+    mock_tree_queue.get_tree_count.return_value = 1
+    mock_tree_queue.get_active_task_count.return_value = 3
+    mock_session_store = MagicMock()
+
+    handler = ClaudeMessageHandler(
+        platform=mock_platform,
+        cli_manager=mock_cli_manager,
+        session_store=mock_session_store,
+    )
+    # Inject mock tree_queue to control returned stats
+    handler.tree_queue = mock_tree_queue
+
+    incoming = IncomingMessage(
+        text="/stats",
+        chat_id="123",
+        user_id="456",
+        message_id="999",
+        platform="discord",
+        username="Tester",
+    )
+
+    await handler._handle_stats_command(incoming)
+
+    # Verify send_stats_embed was called with correct args
+    mock_platform.send_stats_embed.assert_awaited_once()
+    args = mock_platform.send_stats_embed.call_args[0]
+    assert args[0] == "123"
+    stats_dict = args[1]
+    assert stats_dict['active_tasks'] == 3
+    assert stats_dict['tree_count'] == 1
+    assert stats_dict['cli_sessions'] == 2
+    assert stats_dict['uptime'] == "1s"

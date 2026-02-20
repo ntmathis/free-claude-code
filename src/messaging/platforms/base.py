@@ -216,3 +216,12 @@ class MessagingPlatform(ABC):
     def is_connected(self) -> bool:
         """Check if the platform is connected."""
         return False
+
+    def get_uptime(self) -> str:
+        """Return uptime string for the platform. Default: 'N/A'."""
+        return "N/A"
+
+    async def send_stats_embed(self, chat_id: str, stats: dict) -> None:
+        """Send a rich stats embed. Override if platform supports embeds.
+        Default: raise NotImplementedError."""
+        raise NotImplementedError("This platform does not support rich stats embeds")

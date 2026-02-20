@@ -348,6 +348,19 @@ class TreeQueueManager:
         """Get the number of active message trees."""
         return self._repository.tree_count()
 
+    def get_all_trees(self) -> list[MessageTree]:
+        """Get all active message trees."""
+        return self._repository.all_trees()
+
+    def get_active_task_count(self) -> int:
+        """Count total nodes that are IN_PROGRESS or PENDING across all trees."""
+        count = 0
+        for tree in self._repository.all_trees():
+            for node in tree.all_nodes():
+                if node.state in (MessageState.IN_PROGRESS, MessageState.PENDING):
+                    count += 1
+        return count
+
     def set_queue_update_callback(
         self,
         queue_update_callback: Callable[[MessageTree], Awaitable[None]] | None,

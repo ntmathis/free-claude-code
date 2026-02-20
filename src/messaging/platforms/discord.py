@@ -6,9 +6,11 @@ Implements MessagingPlatform for Discord using discord.py.
 
 import asyncio
 import contextlib
+import contextvars
 import os
 import tempfile
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -48,6 +50,12 @@ def _parse_allowed_channels(raw: str | None) -> set[str]:
     return {s.strip() for s in raw.split(",") if s.strip()}
 
 
+# Context variable to hold the current slash interaction for ephemeral-only responses
+_current_interaction: contextvars.ContextVar[_discord.Interaction | None] = (
+    contextvars.ContextVar("current_slash_interaction", default=None)
+)
+
+
 if DISCORD_AVAILABLE and _discord_module is not None:
     _discord = _discord_module
 
@@ -61,11 +69,113 @@ if DISCORD_AVAILABLE and _discord_module is not None:
         ) -> None:
             super().__init__(intents=intents)
             self._platform = platform
+            # Set up slash command tree
+            self.tree = _discord.app_commands.CommandTree(self)
+            self._tree_synced = False
+
+            # Register slash commands
+            self.tree.add_command(
+                _discord.app_commands.Command(
+                    name="stop",
+                    description="Stop all running tasks",
+                    callback=self._slash_stop,
+                )
+            )
+            self.tree.add_command(
+                _discord.app_commands.Command(
+                    name="clear",
+                    description="Clear messages and stop tasks",
+                    callback=self._slash_clear,
+                )
+            )
+            self.tree.add_command(
+                _discord.app_commands.Command(
+                    name="stats",
+                    description="Show bot statistics",
+                    callback=self._slash_stats,
+                )
+            )
+
+        async def _handle_slash_command(
+            self, interaction: _discord.Interaction, command_text: str
+        ) -> None:
+            """Common handler for slash commands."""
+            # Channel validation
+            channel_id = str(interaction.channel_id)
+            if (
+                not self._platform.allowed_channel_ids
+                or channel_id not in self._platform.allowed_channel_ids
+            ):
+                with contextlib.suppress(Exception):
+                    await interaction.response.send_message(
+                        "❌ This channel is not allowed.", ephemeral=True
+                    )
+                return
+
+            # Defer response (15 min budget)
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except Exception as e:
+                logger.error(f"Failed to defer slash interaction: {e}")
+                return
+
+            # Build IncomingMessage and dispatch
+            incoming = IncomingMessage(
+                text=command_text,
+                chat_id=channel_id,
+                user_id=str(interaction.user.id),
+                message_id=str(interaction.id),
+                platform="discord",
+                username=interaction.user.display_name,
+                raw_event=interaction,
+            )
+
+            # Set the current interaction context for ephemeral-only routing
+            token = _current_interaction.set(interaction)
+            try:
+                if self._platform._message_handler:
+                    await self._platform._message_handler(incoming)
+                # No explicit success message; handler output will go to interaction
+            except Exception as e:
+                logger.error(f"Slash command {command_text} failed: {e}")
+                with contextlib.suppress(Exception):
+                    await interaction.edit_original_response(content=f"❌ Error: {e}")
+            finally:
+                _current_interaction.reset(token)
+
+        async def _slash_stop(self, interaction: _discord.Interaction) -> None:
+            await self._handle_slash_command(interaction, "/stop")
+
+        async def _slash_clear(self, interaction: _discord.Interaction) -> None:
+            await self._handle_slash_command(interaction, "/clear")
+
+        async def _slash_stats(self, interaction: _discord.Interaction) -> None:
+            await self._handle_slash_command(interaction, "/stats")
 
         async def on_ready(self) -> None:
             """Called when the bot is ready."""
             self._platform._connected = True
             logger.info("Discord platform connected")
+
+            # Sync slash commands (once)
+            if not self._tree_synced:
+                try:
+                    await self.tree.sync()
+                    self._tree_synced = True
+                    logger.info("Slash commands synced globally")
+                except Exception as e:
+                    logger.error(f"Failed to sync slash commands: {e}")
+
+            # Set initial presence (Resting)
+            try:
+                await self.change_presence(
+                    activity=_discord.Activity(
+                        type=_discord.ActivityType.playing, name="Resting"
+                    )
+                )
+                logger.info("Bot presence set to Resting")
+            except Exception as e:
+                logger.warning(f"Failed to set presence: {e}")
 
         async def on_message(self, message: Any) -> None:
             """Handle incoming Discord messages."""
@@ -115,6 +225,7 @@ class DiscordPlatform(MessagingPlatform):
         self._start_task: asyncio.Task | None = None
         self._pending_voice: dict[tuple[str, str], tuple[str, str]] = {}
         self._pending_voice_lock = asyncio.Lock()
+        self._start_time = datetime.now(UTC)
 
     async def _register_pending_voice(
         self, chat_id: str, voice_msg_id: str, status_msg_id: str
@@ -453,6 +564,20 @@ class DiscordPlatform(MessagingPlatform):
         message_thread_id: str | None = None,
     ) -> str | None:
         """Enqueue a message to be sent."""
+        # If a slash interaction is active, route to it (ephemeral-only)
+        interaction = _current_interaction.get()
+        if interaction is not None:
+            try:
+                if interaction.response.is_done():
+                    await interaction.edit_original_response(content=text)
+                else:
+                    await interaction.response.send_message(
+                        content=text, ephemeral=True
+                    )
+            except Exception as e:
+                logger.error(f"Failed to send ephemeral response: {e}")
+            return None
+
         if not self._limiter:
             return await self.send_message(
                 chat_id, text, reply_to, parse_mode, message_thread_id
@@ -477,6 +602,15 @@ class DiscordPlatform(MessagingPlatform):
         fire_and_forget: bool = True,
     ) -> None:
         """Enqueue a message edit."""
+        # If a slash interaction is active, route to it (ephemeral-only)
+        interaction = _current_interaction.get()
+        if interaction is not None:
+            try:
+                await interaction.edit_original_response(content=text)
+            except Exception as e:
+                logger.error(f"Failed to edit ephemeral response: {e}")
+            return
+
         if not self._limiter:
             await self.edit_message(chat_id, message_id, text, parse_mode)
             return
@@ -497,6 +631,11 @@ class DiscordPlatform(MessagingPlatform):
         fire_and_forget: bool = True,
     ) -> None:
         """Enqueue a message delete."""
+        # If a slash interaction is active, no-op (deletion handled elsewhere or not needed)
+        interaction = _current_interaction.get()
+        if interaction is not None:
+            return
+
         if not self._limiter:
             await self.delete_message(chat_id, message_id)
             return
@@ -517,6 +656,11 @@ class DiscordPlatform(MessagingPlatform):
         fire_and_forget: bool = True,
     ) -> None:
         """Enqueue a bulk delete."""
+        # If a slash interaction is active, no-op (deletion handled elsewhere or not needed)
+        interaction = _current_interaction.get()
+        if interaction is not None:
+            return
+
         if not message_ids:
             return
 
@@ -551,3 +695,87 @@ class DiscordPlatform(MessagingPlatform):
     def is_connected(self) -> bool:
         """Check if connected."""
         return self._connected
+
+    async def update_presence(
+        self, status: str = "idle", count: int = 0, total_trees: int | None = None
+    ) -> None:
+        """
+        Update bot presence based on activity.
+        Status: "working" or "idle"
+        Count: number of active tasks
+        total_trees: total number of message trees (if provided, show both)
+        """
+        # Only update if connected
+        if not self._connected:
+            return
+
+        if not DISCORD_AVAILABLE or _discord_module is None:
+            return
+
+        try:
+            # Determine activity text
+            discord = _get_discord()
+            activity_type = discord.ActivityType.playing
+            base = "Working" if status == "working" else "Resting"
+            if total_trees is not None:
+                name = f"{base} ({count}|{total_trees})"
+            elif count > 0 and status == "working":
+                # Show active count if no total_trees provided
+                name = f"{base} ({count})"
+            else:
+                name = base
+
+            await self._client.change_presence(
+                activity=discord.Activity(type=activity_type, name=name)
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update presence: {e}")
+
+    def get_uptime(self) -> str:
+        """Return formatted uptime string like '1d 2h 3m 4s'."""
+        now = datetime.now(UTC)
+        elapsed = now - self._start_time
+        days = elapsed.days
+        hours, rem = divmod(elapsed.seconds, 3600)
+        minutes, seconds = divmod(rem, 60)
+        parts = []
+        if days:
+            parts.append(f"{days}d")
+        if hours:
+            parts.append(f"{hours}h")
+        if minutes:
+            parts.append(f"{minutes}m")
+        parts.append(f"{seconds}s")
+        return " ".join(parts)
+
+    async def send_stats_embed(self, chat_id: str, stats: dict) -> None:
+        """
+        Send a rich embed with bot statistics.
+
+        stats dict expected keys: active_tasks, tree_count, uptime, cli_sessions
+        """
+        channel = self._client.get_channel(int(chat_id))
+        if not channel:
+            logger.warning(f"Cannot send stats embed: channel {chat_id} not found")
+            return
+
+        # Build embed
+        try:
+            discord = _get_discord()
+            embed = discord.Embed(
+                title="📊 Bot Statistics",
+                color=discord.Color.blue(),
+                timestamp=datetime.now(UTC)
+            )
+            # Add fields
+            embed.add_field(name="🔄 Active Tasks", value=str(stats.get('active_tasks', 0)), inline=True)
+            embed.add_field(name="🌳 Message Trees", value=str(stats.get('tree_count', 0)), inline=True)
+            embed.add_field(name="💬 CLI Sessions", value=str(stats.get('cli_sessions', 0)), inline=True)
+            embed.add_field(name="⏱ Uptime", value=stats.get('uptime', 'N/A'), inline=False)
+            embed.set_footer(text=self.name)
+
+            # Cast to a messageable channel to satisfy type checker; send may fail at runtime
+            send_channel = cast(_discord.abc.Messageable, channel)
+            await send_channel.send(embed=embed)
+        except Exception as e:
+            logger.error(f"Failed to send stats embed: {e}")

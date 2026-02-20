@@ -308,6 +308,10 @@ class ClaudeMessageHandler:
                 parse_mode=self._parse_mode(),
             )
 
+        # Update presence to reflect activity (Working if there are pending/in-progress nodes)
+        if tree:
+            self.platform.fire_and_forget(self._update_presence_for_tree(tree))
+
     async def _update_queue_positions(self, tree: MessageTree) -> None:
         """Refresh queued status messages after a dequeue."""
         try:
@@ -349,6 +353,8 @@ class ClaudeMessageHandler:
                 parse_mode=self._parse_mode(),
             )
         )
+        # Update presence
+        self.platform.fire_and_forget(self._update_presence_for_tree(tree))
 
     def _create_transcript_and_render_ctx(
         self,
@@ -422,6 +428,9 @@ class ClaudeMessageHandler:
                     session_id=captured_session_id,
                 )
                 self.session_store.save_tree(tree.root_id, tree.to_dict())
+                # Update presence
+                await self._update_presence_for_tree(tree)
+
         elif ptype == "error":
             error_msg = parsed.get("message", "Unknown error")
             logger.error(f"HANDLER: Error event received: {error_msg}")
@@ -651,6 +660,11 @@ class ClaudeMessageHandler:
                     parse_mode=self._parse_mode(),
                 )
             )
+        # Update presence
+        if affected:
+            tree = self.tree_queue.get_tree_for_node(node_id)
+            if tree:
+                self.platform.fire_and_forget(self._update_presence_for_tree(tree))
 
     def _get_initial_status(
         self,
@@ -669,6 +683,36 @@ class ClaudeMessageHandler:
 
         # New conversation
         return self._format_status("⏳", "Launching new Claude CLI instance...")
+
+    async def _update_presence_for_tree(self, tree: MessageTree) -> None:
+        """Update bot presence if platform supports it, showing count of active tasks and total trees."""
+        update_fn = getattr(self.platform, "update_presence", None)
+        if not callable(update_fn):
+            return
+
+        # Count all active (PENDING or IN_PROGRESS) nodes across all trees
+        total_active = 0
+        try:
+            all_trees = self.tree_queue.get_all_trees()
+        except AttributeError:
+            # Fallback: only count in the provided tree
+            all_trees = [tree]
+
+        for t in all_trees:
+            for node in t.all_nodes():
+                if node.state in (MessageState.IN_PROGRESS, MessageState.PENDING):
+                    total_active += 1
+
+        # Get total number of message trees
+        try:
+            total_trees = self.tree_queue.get_tree_count()
+        except AttributeError:
+            total_trees = len(all_trees) if all_trees else 0
+
+        if total_active > 0:
+            await update_fn("working", count=total_active, total_trees=total_trees)
+        else:
+            await update_fn("idle", count=0, total_trees=total_trees)
 
     async def stop_all_tasks(self) -> int:
         """
@@ -744,6 +788,10 @@ class ClaudeMessageHandler:
                 trees_to_save[tree.root_id] = tree
         for root_id, tree in trees_to_save.items():
             self.session_store.save_tree(root_id, tree.to_dict())
+        # Update presence if any nodes cancelled
+        if nodes and trees_to_save:
+            first_tree = next(iter(trees_to_save.values()))
+            self.platform.fire_and_forget(self._update_presence_for_tree(first_tree))
 
     async def _handle_stop_command(self, incoming: IncomingMessage) -> None:
         """Handle /stop command from messaging platform."""
@@ -796,17 +844,45 @@ class ClaudeMessageHandler:
 
     async def _handle_stats_command(self, incoming: IncomingMessage) -> None:
         """Handle /stats command."""
-        stats = self.cli_manager.get_stats()
+        # Gather stats
+        cli_stats = self.cli_manager.get_stats()
         tree_count = self.tree_queue.get_tree_count()
+        active_tasks = self.tree_queue.get_active_task_count()
+        # Uptime: always available via base method (default 'N/A')
+        uptime_str = self.platform.get_uptime()
+
+        # Build stats dict
+        stats_dict = {
+            'active_tasks': active_tasks,
+            'tree_count': tree_count,
+            'cli_sessions': cli_stats.get('active_sessions', 0),
+            'uptime': uptime_str,
+        }
+
+        # Try to use platform's rich embed if supported
+        try:
+            await self.platform.send_stats_embed(incoming.chat_id, stats_dict)
+            return
+        except NotImplementedError:
+            pass  # Fallback to plain text
+
+        # Fallback plain text format
         ctx = self._get_render_ctx()
-        msg_id = await self.platform.queue_send_message(
-            incoming.chat_id,
+        text = (
             "📊 "
             + ctx.bold("Stats")
             + "\n"
-            + ctx.escape_text(f"• Active CLI: {stats['active_sessions']}")
+            + ctx.escape_text(f"• Active CLI: {cli_stats.get('active_sessions', 0)}")
             + "\n"
-            + ctx.escape_text(f"• Message Trees: {tree_count}"),
+            + ctx.escape_text(f"• Message Trees: {tree_count}")
+            + "\n"
+            + ctx.escape_text(f"• Active Tasks: {active_tasks}")
+            + "\n"
+            + ctx.escape_text(f"• Uptime: {uptime_str}")
+        )
+        msg_id = await self.platform.queue_send_message(
+            incoming.chat_id,
+            text,
             fire_and_forget=False,
             message_thread_id=incoming.message_thread_id,
         )

@@ -668,3 +668,52 @@ class TestSessionStoreTrees:
 
         root_id = store.get_tree_root_for_node("new_node")
         assert root_id == "root_tree"
+
+
+class TestGetActiveTaskCount:
+    """Tests for TreeQueueManager.get_active_task_count."""
+
+    @pytest.mark.asyncio
+    async def test_counts_pending_and_in_progress(self):
+        """Test that only PENDING and IN_PROGRESS nodes are counted."""
+        manager = TreeQueueManager()
+        # Create tree with root via manager API
+        incoming_root = IncomingMessage(
+            text="root", chat_id="1", user_id="u1", message_id="m1", platform="test"
+        )
+        tree = await manager.create_tree(
+            node_id="root", incoming=incoming_root, status_message_id="s1"
+        )
+        # Add child1 and set to IN_PROGRESS
+        incoming_child1 = IncomingMessage(
+            text="child1", chat_id="1", user_id="u1", message_id="m2", platform="test"
+        )
+        child1 = await manager.add_to_tree(
+            parent_node_id="root",
+            node_id="child1",
+            incoming=incoming_child1,
+            status_message_id="s2",
+        )
+        await tree.update_state("child1", MessageState.IN_PROGRESS)
+        # Add child2 and set to COMPLETED
+        incoming_child2 = IncomingMessage(
+            text="child2", chat_id="1", user_id="u1", message_id="m3", platform="test"
+        )
+        child2 = await manager.add_to_tree(
+            parent_node_id="root",
+            node_id="child2",
+            incoming=incoming_child2,
+            status_message_id="s3",
+        )
+        await tree.update_state("child2", MessageState.COMPLETED)
+        # Create another tree with root ERROR
+        incoming_root2 = IncomingMessage(
+            text="root2", chat_id="2", user_id="u2", message_id="m4", platform="test"
+        )
+        tree2 = await manager.create_tree(
+            node_id="root2", incoming=incoming_root2, status_message_id="s4"
+        )
+        await tree2.update_state("root2", MessageState.ERROR)
+
+        count = manager.get_active_task_count()
+        assert count == 2  # root (PENDING) + child1 (IN_PROGRESS)

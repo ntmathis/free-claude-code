@@ -95,6 +95,9 @@ def mock_platform():
     platform.queue_send_message = AsyncMock(return_value="msg_123")
     platform.queue_edit_message = AsyncMock()
     platform.queue_delete_message = AsyncMock()
+    # By default, platform does not support embed stats (raises NotImplementedError)
+    platform.send_stats_embed = MagicMock(side_effect=NotImplementedError)
+    platform.get_uptime = MagicMock(return_value="N/A")
 
     def _fire_and_forget(task):
         if asyncio.iscoroutine(task):
