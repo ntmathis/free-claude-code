@@ -1,6 +1,8 @@
 """Tests for Discord platform adapter."""
 
 import asyncio
+from collections.abc import Callable
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -709,7 +711,9 @@ class TestDiscordPlatform:
 
         # Mock channel
         mock_channel = AsyncMock()
-        platform._client.get_channel = MagicMock(return_value=mock_channel)
+        platform._client.get_channel = cast(
+            Callable[[int], Any], MagicMock(return_value=mock_channel)
+        )
 
         stats = {
             "active_tasks": 5,
@@ -970,7 +974,9 @@ class TestDiscordPlatform:
 
         # Mock channel
         mock_channel = AsyncMock()
-        platform._client.get_channel = MagicMock(return_value=mock_channel)
+        platform._client.get_channel = cast(
+            Callable[[int], Any], MagicMock(return_value=mock_channel)
+        )
 
         # Mock an active interaction
         mock_interaction = MagicMock()
@@ -1003,7 +1009,7 @@ class TestDiscordPlatform:
             mock_interaction.edit_original_response.assert_not_called()
             # Verify channel.send was called (embed sent as new message)
             mock_channel.send.assert_awaited_once()
-            args, kwargs = mock_channel.send.call_args
+            _args, kwargs = mock_channel.send.call_args
             assert "embed" in kwargs
         finally:
             _current_interaction.reset(token)
@@ -1016,7 +1022,9 @@ class TestDiscordPlatform:
 
         # Mock channel but ensure it's not used
         mock_channel = AsyncMock()
-        platform._client.get_channel = MagicMock(return_value=mock_channel)
+        platform._client.get_channel = cast(
+            Callable[[int], Any], MagicMock(return_value=mock_channel)
+        )
 
         # Mock an active interaction
         mock_interaction = MagicMock()

@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     enable_suggestion_mode_skip: bool = True
     enable_filepath_extraction_mock: bool = True
 
+    # ==================== Git Attribution ====================
+    include_model_in_git_attribution: bool = Field(
+        default=False, validation_alias="INCLUDE_MODEL_IN_GIT_ATTRIBUTION"
+    )
+
     # ==================== NIM Settings ====================
     nim: NimSettings = Field(default_factory=NimSettings)
 

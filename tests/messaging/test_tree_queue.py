@@ -688,7 +688,7 @@ class TestGetActiveTaskCount:
         incoming_child1 = IncomingMessage(
             text="child1", chat_id="1", user_id="u1", message_id="m2", platform="test"
         )
-        child1 = await manager.add_to_tree(
+        _child1 = await manager.add_to_tree(
             parent_node_id="root",
             node_id="child1",
             incoming=incoming_child1,
@@ -699,7 +699,7 @@ class TestGetActiveTaskCount:
         incoming_child2 = IncomingMessage(
             text="child2", chat_id="1", user_id="u1", message_id="m3", platform="test"
         )
-        child2 = await manager.add_to_tree(
+        _child2 = await manager.add_to_tree(
             parent_node_id="root",
             node_id="child2",
             incoming=incoming_child2,

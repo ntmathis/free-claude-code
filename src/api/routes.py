@@ -15,7 +15,7 @@ from providers.exceptions import InvalidRequestError, ProviderError
 from providers.logging_utils import build_request_summary, log_request_compact
 
 from .dependencies import get_provider, get_provider_for_type, get_settings
-from .models.anthropic import MessagesRequest, TokenCountRequest
+from .models.anthropic import MessagesRequest, SystemContent, TokenCountRequest
 from .models.responses import TokenCountResponse
 from .optimization_handlers import try_optimizations
 from .request_utils import get_token_count
@@ -86,6 +86,25 @@ async def create_message(
             candidate_request = request_data.model_copy(deep=True)
             candidate_request.model = provider_model
             candidate_request.target_provider_type = provider_type
+
+            # Inject model attribution instruction if enabled
+            if settings.include_model_in_git_attribution:
+                instruction = (
+                    f"IMPORTANT: When making git commits, include a Co-Authored-By trailer "
+                    f'with the model name: "{provider_model}". '
+                    f"Use exact format: Co-Authored-By: {provider_model} <{provider_model}@localhost>. "
+                )
+                current_system = candidate_request.system
+                if current_system is None:
+                    candidate_request.system = instruction
+                elif isinstance(current_system, str):
+                    candidate_request.system = instruction + "\n\n" + current_system
+                else:
+                    # list[SystemContent]
+                    candidate_request.system = [
+                        SystemContent(type="text", text=instruction),
+                        *current_system,
+                    ]
 
             stream = route_provider.stream_response(
                 candidate_request,

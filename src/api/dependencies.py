@@ -18,6 +18,7 @@ def get_settings() -> Settings:
 
 def get_provider_for_type(provider_type: str) -> BaseProvider:
     """Get or create a provider instance for the given provider type."""
+    print(f"DEBUG get_provider_for_type called with {provider_type}")
     if provider_type in _providers:
         return _providers[provider_type]
 

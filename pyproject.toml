@@ -85,6 +85,10 @@ indent-style = "space"
 line-ending = "auto"
 skip-magic-trailing-comma = false
 
+[tool.ty.src]
+# Exclude test files from type checking to allow mocking flexibility
+exclude = ["tests"]
+
 [tool.ty.environment]
 python-version = "3.14"
 

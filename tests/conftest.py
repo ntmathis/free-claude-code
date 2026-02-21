@@ -13,6 +13,8 @@ os.environ["OPUS_MODEL"] = "nvidia_nim/test-opus-model"
 os.environ["SONNET_MODEL"] = "nvidia_nim/test-sonnet-model"
 os.environ["HAIKU_MODEL"] = "nvidia_nim/test-haiku-model"
 os.environ["PTB_TIMEDELTA"] = "1"
+# Ensure provider_type matches the mapped models (nvidia_nim) to keep tests consistent
+os.environ["PROVIDER_TYPE"] = "nvidia_nim"
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

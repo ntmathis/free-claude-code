@@ -183,3 +183,90 @@ def test_stop_endpoint_no_handler_no_cli_503():
         delattr(app.state, "cli_manager")
     response = client.post("/stop")
     assert response.status_code == 503
+
+
+def test_include_model_in_git_attribution(monkeypatch):
+    """Test that system instruction is injected when setting enabled."""
+    # Enable the setting
+    monkeypatch.setenv("INCLUDE_MODEL_IN_GIT_ATTRIBUTION", "true")
+    # Clear settings cache to pick up new env var
+    from config.settings import get_settings
+
+    get_settings.cache_clear()
+    # Clear any previous captured calls
+    _stream_response_calls.clear()
+    payload = {
+        "model": "claude-3-sonnet",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 100,
+        "stream": True,
+    }
+    response = client.post("/v1/messages", json=payload)
+    assert response.status_code == 200
+    # Verify that the provider's stream_response was called with a candidate_request containing the instruction
+    assert len(_stream_response_calls) == 1
+    # The first positional argument is the candidate_request
+    candidate_request = _stream_response_calls[0][0][0]
+    assert candidate_request.system is not None
+    # The system should be a string containing the instruction with the model name
+    assert isinstance(candidate_request.system, str)
+    expected_fragment = (
+        "Co-Authored-By: test-sonnet-model <test-sonnet-model@localhost>"
+    )
+    assert expected_fragment in candidate_request.system
+
+
+def test_include_model_git_attribution_with_system_string(monkeypatch):
+    """Test injection when original system is a string."""
+    monkeypatch.setenv("INCLUDE_MODEL_IN_GIT_ATTRIBUTION", "true")
+    from config.settings import get_settings
+
+    get_settings.cache_clear()
+    _stream_response_calls.clear()
+    payload = {
+        "model": "claude-3-sonnet",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 100,
+        "stream": True,
+        "system": "You are a helpful assistant.",
+    }
+    response = client.post("/v1/messages", json=payload)
+    assert response.status_code == 200
+    candidate_request = _stream_response_calls[0][0][0]
+    assert isinstance(candidate_request.system, str)
+    expected_instruction = (
+        "IMPORTANT: When making git commits, include a Co-Authored-By trailer "
+        'with the model name: "test-sonnet-model". '
+        "Use exact format: Co-Authored-By: test-sonnet-model <test-sonnet-model@localhost>. "
+    )
+    expected_system = expected_instruction + "\n\nYou are a helpful assistant."
+    assert candidate_request.system == expected_system
+
+
+def test_include_model_git_attribution_with_system_list(monkeypatch):
+    """Test injection when original system is a list of SystemContent."""
+    monkeypatch.setenv("INCLUDE_MODEL_IN_GIT_ATTRIBUTION", "true")
+    from config.settings import get_settings
+
+    get_settings.cache_clear()
+    _stream_response_calls.clear()
+    payload = {
+        "model": "claude-3-sonnet",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 100,
+        "stream": True,
+        "system": [{"type": "text", "text": "You are a helpful assistant."}],
+    }
+    response = client.post("/v1/messages", json=payload)
+    assert response.status_code == 200
+    candidate_request = _stream_response_calls[0][0][0]
+    assert isinstance(candidate_request.system, list)
+    # First element should be SystemContent with instruction
+    first = candidate_request.system[0]
+    assert first.type == "text"
+    expected_fragment = (
+        "Co-Authored-By: test-sonnet-model <test-sonnet-model@localhost>"
+    )
+    assert expected_fragment.strip() in first.text
+    # There should be at least 2 elements (instruction + original)
+    assert len(candidate_request.system) >= 2
